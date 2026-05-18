@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Banco local com dados reais
+*.db
+*.sqlite
+*.sqlite3
+
+# Node/Vite
+node_modules/
+API/node_modules/
+FRONTEND/node_modules/
+dist/
+API/dist/
+FRONTEND/dist/
+
+# Sistema/editor
+.DS_Store
+Thumbs.db
+.vscode/
