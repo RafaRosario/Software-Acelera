@@ -22,6 +22,7 @@ class Veiculo(Base):
     placa = Column(String, unique=True, nullable=False)
     tipo = Column(String, nullable=False)
     observacoes = Column(Text, nullable=True)
+    motivo_indisponibilidade = Column(Text, nullable=True)
     ativo = Column(Boolean, default=True)
 
 class Empresa(Base):

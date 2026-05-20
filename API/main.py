@@ -19,6 +19,10 @@ STATUS_FRETE = [
     "Aguardando horario",
     "A caminho P1",
     "coletado P1",
+    "A caminho ponto adicional",
+    "Pontos adicionais",
+    "A caminho destino",
+    "Chegada no destino",
     "retornando",
     "concluido",
     "Cancelada",
@@ -58,9 +62,16 @@ def preparar_banco():
 
     if "veiculos" in tabelas:
         colunas = {coluna["name"] for coluna in inspector.get_columns("veiculos")}
-        if "observacoes" not in colunas:
-            with engine.begin() as conexao:
-                conexao.execute(text("ALTER TABLE veiculos ADD COLUMN observacoes TEXT"))
+        ajustes = {
+            "observacoes": "ALTER TABLE veiculos ADD COLUMN observacoes TEXT",
+            "motivo_indisponibilidade": "ALTER TABLE veiculos ADD COLUMN motivo_indisponibilidade TEXT",
+            "ativo": "ALTER TABLE veiculos ADD COLUMN ativo BOOLEAN DEFAULT 1",
+        }
+
+        with engine.begin() as conexao:
+            for coluna, comando in ajustes.items():
+                if coluna not in colunas:
+                    conexao.execute(text(comando))
 
     if "empresas" in tabelas:
         colunas = {coluna["name"] for coluna in inspector.get_columns("empresas")}
@@ -207,6 +218,112 @@ def criar_xlsx(linhas: list[list]) -> bytes:
     return buffer.getvalue()
 
 
+def nome_aba_excel(nome: str, usados: set[str]) -> str:
+    proibidos = "[]:*?/\\"
+    limpo = "".join("_" if caractere in proibidos else caractere for caractere in (nome or "Motorista")).strip()
+    base = (limpo or "Motorista")[:31]
+    nome_final = base
+    contador = 2
+
+    while nome_final in usados:
+        sufixo = f" {contador}"
+        nome_final = f"{base[:31 - len(sufixo)]}{sufixo}"
+        contador += 1
+
+    usados.add(nome_final)
+    return nome_final
+
+
+def criar_xlsx_abas(abas: list[tuple[str, list[list]]]) -> bytes:
+    buffer = io.BytesIO()
+    usados: set[str] = set()
+    abas_normalizadas = [(nome_aba_excel(nome, usados), linhas) for nome, linhas in abas]
+
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as arquivo:
+        worksheets = "\n".join(
+            f'<Override PartName="/xl/worksheets/sheet{indice}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+            for indice, _ in enumerate(abas_normalizadas, start=1)
+        )
+        arquivo.writestr(
+            "[Content_Types].xml",
+            f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+{worksheets}
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>""",
+        )
+        arquivo.writestr(
+            "_rels/.rels",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>""",
+        )
+        sheets = "".join(
+            f'<sheet name="{escape(nome)}" sheetId="{indice}" r:id="rId{indice}"/>'
+            for indice, (nome, _) in enumerate(abas_normalizadas, start=1)
+        )
+        arquivo.writestr(
+            "xl/workbook.xml",
+            f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>{sheets}</sheets>
+</workbook>""",
+        )
+        rels = "\n".join(
+            f'<Relationship Id="rId{indice}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{indice}.xml"/>'
+            for indice, _ in enumerate(abas_normalizadas, start=1)
+        )
+        arquivo.writestr(
+            "xl/_rels/workbook.xml.rels",
+            f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+{rels}
+<Relationship Id="rId{len(abas_normalizadas) + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>""",
+        )
+        arquivo.writestr(
+            "xl/styles.xml",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>
+<fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0"/></cellXfs>
+</styleSheet>""",
+        )
+
+        for indice_aba, (_, linhas) in enumerate(abas_normalizadas, start=1):
+            sheet_rows = []
+            for indice_linha, linha in enumerate(linhas, start=1):
+                cells = "".join(
+                    celula_xml(indice_linha, indice_coluna, valor, 1 if indice_linha == 1 else 0)
+                    for indice_coluna, valor in enumerate(linha, start=1)
+                )
+                sheet_rows.append(f'<row r="{indice_linha}">{cells}</row>')
+
+            arquivo.writestr(
+                f"xl/worksheets/sheet{indice_aba}.xml",
+                f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<cols>
+<col min="1" max="1" width="10" customWidth="1"/>
+<col min="2" max="2" width="14" customWidth="1"/>
+<col min="3" max="4" width="20" customWidth="1"/>
+<col min="5" max="5" width="24" customWidth="1"/>
+<col min="6" max="6" width="42" customWidth="1"/>
+</cols>
+<sheetData>{''.join(sheet_rows)}</sheetData>
+</worksheet>""",
+            )
+
+    return buffer.getvalue()
+
+
 def obter_ou_404(db: Session, modelo, item_id: int, detalhe: str):
     item = db.query(modelo).filter(modelo.id == item_id).first()
     if not item:
@@ -221,7 +338,10 @@ def home():
 
 @app.post("/motoristas/", response_model=schemas.MotoristaResponse, tags=["Motoristas"])
 def criar_motorista(motorista: schemas.MotoristaCreate, db: Session = Depends(get_db)):
-    db_motorista = models.Motorista(**motorista.model_dump())
+    dados = motorista.model_dump()
+    dados["cnh"] = dados.get("cnh") or ""
+    dados["observacoes"] = dados.get("observacoes") or ""
+    db_motorista = models.Motorista(**dados)
     db.add(db_motorista)
     db.commit()
     db.refresh(db_motorista)
@@ -231,6 +351,21 @@ def criar_motorista(motorista: schemas.MotoristaCreate, db: Session = Depends(ge
 @app.get("/motoristas/", response_model=list[schemas.MotoristaResponse], tags=["Motoristas"])
 def listar_motoristas(db: Session = Depends(get_db)):
     return db.query(models.Motorista).order_by(models.Motorista.nome).all()
+
+
+@app.put("/motoristas/{motorista_id}", response_model=schemas.MotoristaResponse, tags=["Motoristas"])
+def atualizar_motorista(motorista_id: int, dados: schemas.MotoristaUpdate, db: Session = Depends(get_db)):
+    db_motorista = obter_ou_404(db, models.Motorista, motorista_id, "Motorista nao encontrado")
+    dados_atualizacao = dados.model_dump(exclude_unset=True)
+    if "cnh" in dados_atualizacao:
+        dados_atualizacao["cnh"] = dados_atualizacao["cnh"] or ""
+    if "observacoes" in dados_atualizacao:
+        dados_atualizacao["observacoes"] = dados_atualizacao["observacoes"] or ""
+    for campo, valor in dados_atualizacao.items():
+        setattr(db_motorista, campo, valor)
+    db.commit()
+    db.refresh(db_motorista)
+    return db_motorista
 
 
 @app.delete("/motoristas/{motorista_id}", tags=["Motoristas"])
@@ -255,6 +390,16 @@ def listar_veiculos(db: Session = Depends(get_db)):
     return db.query(models.Veiculo).order_by(models.Veiculo.placa).all()
 
 
+@app.put("/veiculos/{veiculo_id}", response_model=schemas.VeiculoResponse, tags=["Veiculos"])
+def atualizar_veiculo(veiculo_id: int, dados: schemas.VeiculoUpdate, db: Session = Depends(get_db)):
+    db_veiculo = obter_ou_404(db, models.Veiculo, veiculo_id, "Veiculo nao encontrado")
+    for campo, valor in dados.model_dump(exclude_unset=True).items():
+        setattr(db_veiculo, campo, valor)
+    db.commit()
+    db.refresh(db_veiculo)
+    return db_veiculo
+
+
 @app.delete("/veiculos/{veiculo_id}", tags=["Veiculos"])
 def excluir_veiculo(veiculo_id: int, db: Session = Depends(get_db)):
     db_veiculo = obter_ou_404(db, models.Veiculo, veiculo_id, "Veiculo nao encontrado")
@@ -277,6 +422,19 @@ def criar_empresa(empresa: schemas.EmpresaCreate, db: Session = Depends(get_db))
 @app.get("/empresas/", response_model=list[schemas.EmpresaResponse], tags=["Empresas"])
 def listar_empresas(db: Session = Depends(get_db)):
     return db.query(models.Empresa).order_by(models.Empresa.nome).all()
+
+
+@app.put("/empresas/{empresa_id}", response_model=schemas.EmpresaResponse, tags=["Empresas"])
+def atualizar_empresa(empresa_id: int, empresa: schemas.EmpresaUpdate, db: Session = Depends(get_db)):
+    db_empresa = obter_ou_404(db, models.Empresa, empresa_id, "Empresa nao encontrada")
+    dados = empresa.model_dump(exclude_unset=True)
+    if any(campo in dados for campo in ["logradouro", "numero", "bairro", "cidade", "uf", "endereco"]):
+        dados["endereco"] = montar_endereco_empresa(empresa)
+    for campo, valor in dados.items():
+        setattr(db_empresa, campo, valor)
+    db.commit()
+    db.refresh(db_empresa)
+    return db_empresa
 
 
 @app.delete("/empresas/{empresa_id}", tags=["Empresas"])
@@ -323,7 +481,7 @@ def exportar_fretes_concluidos(
     empresas = {empresa.nome: empresa for empresa in db.query(models.Empresa).all()}
 
     linhas = [[
-        "CTE",
+        "Nota",
         "OC",
         "Data Frete",
         "Veículo",
@@ -339,7 +497,7 @@ def exportar_fretes_concluidos(
         remetente = empresas.get(frete.origem)
         destinatario = empresas.get(frete.destino)
         linhas.append([
-            frete.cte or "",
+            frete.nota_fiscal or "",
             frete.oc or "",
             frete.data_coleta.strftime("%d.%m"),
             frete.tipo_caminhao_necessario,
@@ -457,6 +615,52 @@ def excluir_frete(frete_id: int, db: Session = Depends(get_db)):
     db.delete(db_frete)
     db.commit()
     return {"mensagem": "Frete excluido"}
+
+
+@app.get("/motoristas/historico/exportar", tags=["Alocacao"])
+def exportar_historico_motoristas(db: Session = Depends(get_db)):
+    motoristas = db.query(models.Motorista).order_by(models.Motorista.nome).all()
+    abas = []
+
+    for motorista in motoristas:
+        fretes_motorista = (
+            db.query(models.Frete)
+            .filter(
+                models.Frete.motorista_id == motorista.id,
+                models.Frete.status.in_(["concluido", "Concluida"]),
+            )
+            .order_by(models.Frete.data_coleta, models.Frete.horario_coleta)
+            .all()
+        )
+        linhas = [[None, "veiculo", "origem", "destino", "pontos adicionais", "obs"]]
+
+        for frete in fretes_motorista:
+            pontos = ", ".join(
+                ponto.strip()
+                for ponto in (frete.empresas_coleta or "").split(",")
+                if ponto and ponto.strip()
+            )
+            linhas.append([
+                frete.data_coleta.strftime("%d.%m"),
+                frete.tipo_caminhao_necessario,
+                frete.origem,
+                frete.destino,
+                pontos,
+                frete.observacoes or "",
+            ])
+
+        abas.append((motorista.nome, linhas))
+
+    if not abas:
+        abas = [("Motoristas", [[None, "veiculo", "origem", "destino", "pontos adicionais", "obs"]])]
+
+    conteudo = criar_xlsx_abas(abas)
+    nome = "fretes-motoristas-controle.xlsx"
+    return Response(
+        content=conteudo,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nome}"'},
+    )
 
 
 @app.get("/motoristas/alocacao/", response_model=list[schemas.MotoristaComContagem], tags=["Alocacao"])

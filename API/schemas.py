@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+import re
+
+from pydantic import BaseModel, field_validator
 from datetime import date, time
 from typing import Optional
 
@@ -10,8 +12,71 @@ class MotoristaBase(BaseModel):
     cnh: Optional[str] = None
     observacoes: Optional[str] = None
 
+    @field_validator("rg")
+    @classmethod
+    def validar_rg(cls, valor: str) -> str:
+        limpo = re.sub(r"[^0-9xX]", "", valor or "").upper()
+        if not 7 <= len(limpo) <= 9:
+            raise ValueError("RG invalido")
+        return valor
+
+    @field_validator("cpf")
+    @classmethod
+    def validar_cpf(cls, valor: str) -> str:
+        cpf = re.sub(r"\D", "", valor or "")
+        if len(cpf) != 11 or cpf == cpf[0] * 11:
+            raise ValueError("CPF invalido")
+
+        def digito(base: str) -> int:
+            soma = sum(int(numero) * (len(base) + 1 - indice) for indice, numero in enumerate(base))
+            resto = soma % 11
+            return 0 if resto < 2 else 11 - resto
+
+        if digito(cpf[:9]) != int(cpf[9]) or digito(cpf[:10]) != int(cpf[10]):
+            raise ValueError("CPF invalido")
+
+        return valor
+
 class MotoristaCreate(MotoristaBase):
     pass
+
+class MotoristaUpdate(BaseModel):
+    nome: Optional[str] = None
+    telefone: Optional[str] = None
+    rg: Optional[str] = None
+    cpf: Optional[str] = None
+    cnh: Optional[str] = None
+    observacoes: Optional[str] = None
+    ativo: Optional[bool] = None
+
+    @field_validator("rg")
+    @classmethod
+    def validar_rg(cls, valor: Optional[str]) -> Optional[str]:
+        if valor is None:
+            return valor
+        limpo = re.sub(r"[^0-9xX]", "", valor or "").upper()
+        if not 7 <= len(limpo) <= 9:
+            raise ValueError("RG invalido")
+        return valor
+
+    @field_validator("cpf")
+    @classmethod
+    def validar_cpf(cls, valor: Optional[str]) -> Optional[str]:
+        if valor is None:
+            return valor
+        cpf = re.sub(r"\D", "", valor or "")
+        if len(cpf) != 11 or cpf == cpf[0] * 11:
+            raise ValueError("CPF invalido")
+
+        def digito(base: str) -> int:
+            soma = sum(int(numero) * (len(base) + 1 - indice) for indice, numero in enumerate(base))
+            resto = soma % 11
+            return 0 if resto < 2 else 11 - resto
+
+        if digito(cpf[:9]) != int(cpf[9]) or digito(cpf[:10]) != int(cpf[10]):
+            raise ValueError("CPF invalido")
+
+        return valor
 
 class MotoristaResponse(MotoristaBase):
     id: int
@@ -24,6 +89,7 @@ class VeiculoBase(BaseModel):
     placa: str
     tipo: str
     observacoes: Optional[str] = None
+    motivo_indisponibilidade: Optional[str] = None
 
 class VeiculoCreate(VeiculoBase):
     pass
@@ -34,6 +100,13 @@ class VeiculoResponse(VeiculoBase):
 
     class Config:
         from_attributes = True
+
+class VeiculoUpdate(BaseModel):
+    placa: Optional[str] = None
+    tipo: Optional[str] = None
+    ativo: Optional[bool] = None
+    observacoes: Optional[str] = None
+    motivo_indisponibilidade: Optional[str] = None
 
 class EmpresaBase(BaseModel):
     nome: str
@@ -51,6 +124,21 @@ class EmpresaBase(BaseModel):
 
 class EmpresaCreate(EmpresaBase):
     pass
+
+class EmpresaUpdate(BaseModel):
+    nome: Optional[str] = None
+    cnpj: Optional[str] = None
+    cliente: Optional[bool] = None
+    cep: Optional[str] = None
+    logradouro: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    uf: Optional[str] = None
+    endereco: Optional[str] = None
+    observacoes: Optional[str] = None
+    ativo: Optional[bool] = None
 
 class EmpresaResponse(EmpresaBase):
     id: int
