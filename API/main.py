@@ -45,7 +45,11 @@ def preparar_banco():
             "empresas_coleta": "ALTER TABLE fretes ADD COLUMN empresas_coleta TEXT",
             "destino": "ALTER TABLE fretes ADD COLUMN destino VARCHAR DEFAULT '' NOT NULL",
             "retorno": "ALTER TABLE fretes ADD COLUMN retorno BOOLEAN DEFAULT 0",
+            "tipo_frete": "ALTER TABLE fretes ADD COLUMN tipo_frete VARCHAR DEFAULT 'principal' NOT NULL",
+            "frete_principal_id": "ALTER TABLE fretes ADD COLUMN frete_principal_id INTEGER",
             "valor_servico": "ALTER TABLE fretes ADD COLUMN valor_servico FLOAT",
+            "valor_retorno": "ALTER TABLE fretes ADD COLUMN valor_retorno FLOAT",
+            "valor_ponto_adicional": "ALTER TABLE fretes ADD COLUMN valor_ponto_adicional FLOAT",
             "observacoes": "ALTER TABLE fretes ADD COLUMN observacoes TEXT",
         }
 
@@ -53,6 +57,25 @@ def preparar_banco():
             for coluna, comando in ajustes.items():
                 if coluna not in colunas:
                     conexao.execute(text(comando))
+            conexao.execute(text("""
+                UPDATE fretes
+                SET valor_retorno = COALESCE(
+                    valor_retorno,
+                    (
+                        SELECT retorno.valor_servico
+                        FROM fretes AS retorno
+                        WHERE retorno.frete_principal_id = fretes.id
+                            AND retorno.tipo_frete = 'retorno'
+                            AND retorno.valor_servico IS NOT NULL
+                        LIMIT 1
+                    )
+                )
+                WHERE COALESCE(tipo_frete, 'principal') = 'principal'
+            """))
+            conexao.execute(text("""
+                DELETE FROM fretes
+                WHERE tipo_frete = 'retorno'
+            """))
 
     if "motoristas" in tabelas:
         colunas = {coluna["name"] for coluna in inspector.get_columns("motoristas")}
@@ -120,6 +143,10 @@ def montar_rota(frete: schemas.FreteCreate | schemas.FreteUpdate) -> str:
     empresas = frete.empresas_coleta or ""
     pontos = [ponto.strip() for ponto in [origem, empresas, destino] if ponto and ponto.strip()]
     return " -> ".join(pontos)
+
+
+def pontos_adicionais_frete(frete: models.Frete) -> list[str]:
+    return [ponto.strip() for ponto in (frete.empresas_coleta or "").split(",") if ponto and ponto.strip()]
 
 
 def montar_endereco_empresa(empresa: schemas.EmpresaCreate) -> str:
@@ -448,8 +475,9 @@ def excluir_empresa(empresa_id: int, db: Session = Depends(get_db)):
 @app.post("/fretes/", response_model=schemas.FreteResponse, tags=["Fretes"])
 def criar_frete(frete: schemas.FreteCreate, db: Session = Depends(get_db)):
     dados = frete.model_dump()
+    dados["tipo_frete"] = dados.get("tipo_frete") or "principal"
     dados["rota"] = montar_rota(frete)
-    dados["pontoAdicional"] = frete.retorno
+    dados["pontoAdicional"] = frete.retorno and dados["tipo_frete"] == "principal"
     db_frete = models.Frete(**dados)
     db.add(db_frete)
     db.commit()
@@ -469,7 +497,10 @@ def exportar_fretes_concluidos(
     cliente: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    consulta = db.query(models.Frete).filter(models.Frete.status.in_(["concluido", "Concluida"]))
+    consulta = db.query(models.Frete).filter(
+        models.Frete.status.in_(["concluido", "Concluida"]),
+        models.Frete.tipo_frete != "retorno",
+    )
     if inicio:
         consulta = consulta.filter(models.Frete.data_coleta >= inicio)
     if fim:
@@ -508,6 +539,35 @@ def exportar_fretes_concluidos(
             frete.valor_servico or 0,
             "35 d",
         ])
+        pontos_adicionais = pontos_adicionais_frete(frete)
+        if pontos_adicionais and frete.valor_ponto_adicional is not None:
+            primeiro_ponto = pontos_adicionais[0]
+            empresa_ponto = empresas.get(primeiro_ponto)
+            linhas.append([
+                frete.nota_fiscal or "",
+                frete.oc or "",
+                frete.data_coleta.strftime("%d.%m"),
+                frete.tipo_caminhao_necessario,
+                frete.origem,
+                remetente.cidade if remetente else "",
+                primeiro_ponto,
+                empresa_ponto.cidade if empresa_ponto else "",
+                frete.valor_ponto_adicional or 0,
+                "35 d",
+            ])
+        if frete.retorno and frete.valor_retorno is not None:
+            linhas.append([
+                frete.nota_fiscal or "",
+                frete.oc or "",
+                frete.data_coleta.strftime("%d.%m"),
+                frete.tipo_caminhao_necessario,
+                frete.destino,
+                destinatario.cidade if destinatario else "",
+                frete.origem,
+                remetente.cidade if remetente else "",
+                frete.valor_retorno or 0,
+                "35 d",
+            ])
 
     conteudo = criar_xlsx(linhas)
     nome = "fretes-concluidos.xlsx"
@@ -525,7 +585,10 @@ def excluir_fretes_concluidos(
     cliente: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    consulta = db.query(models.Frete).filter(models.Frete.status.in_(["concluido", "Concluida"]))
+    consulta = db.query(models.Frete).filter(
+        models.Frete.status.in_(["concluido", "Concluida"]),
+        models.Frete.tipo_frete != "retorno",
+    )
     if inicio:
         consulta = consulta.filter(models.Frete.data_coleta >= inicio)
     if fim:
@@ -569,6 +632,8 @@ def atualizar_frete(frete_id: int, frete: schemas.FreteUpdate, db: Session = Dep
 def atualizar_valor_frete(frete_id: int, valor: schemas.FreteValorUpdate, db: Session = Depends(get_db)):
     db_frete = obter_ou_404(db, models.Frete, frete_id, "Frete nao encontrado")
     db_frete.valor_servico = valor.valor_servico
+    db_frete.valor_retorno = valor.valor_retorno
+    db_frete.valor_ponto_adicional = valor.valor_ponto_adicional
     db.commit()
     db.refresh(db_frete)
     return db_frete
@@ -612,6 +677,9 @@ def alocar_frete(frete_id: int, alocacao: schemas.FreteUpdate, db: Session = Dep
 @app.delete("/fretes/{frete_id}", tags=["Fretes"])
 def excluir_frete(frete_id: int, db: Session = Depends(get_db)):
     db_frete = obter_ou_404(db, models.Frete, frete_id, "Frete nao encontrado")
+    retornos = db.query(models.Frete).filter(models.Frete.frete_principal_id == db_frete.id).all()
+    for frete_retorno in retornos:
+        db.delete(frete_retorno)
     db.delete(db_frete)
     db.commit()
     return {"mensagem": "Frete excluido"}

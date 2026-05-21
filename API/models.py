@@ -59,8 +59,12 @@ class Frete(Base):
     rota = Column(String, nullable=False, default="")
     tipo_caminhao_necessario = Column(String, nullable=False)
     retorno = Column(Boolean, default=False)
+    tipo_frete = Column(String, nullable=False, default="principal")
+    frete_principal_id = Column(Integer, ForeignKey("fretes.id"), nullable=True)
     status = Column(String, default="Aguardando horario")
     valor_servico = Column(Float, nullable=True)
+    valor_retorno = Column(Float, nullable=True)
+    valor_ponto_adicional = Column(Float, nullable=True)
     observacoes = Column(Text, nullable=True)
     pontoAdicional = Column(Boolean, default=False)
     
@@ -69,3 +73,4 @@ class Frete(Base):
     
     motorista = relationship("Motorista")
     veiculo = relationship("Veiculo")
+    frete_principal = relationship("Frete", remote_side=[id])

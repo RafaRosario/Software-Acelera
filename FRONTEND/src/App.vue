@@ -86,6 +86,8 @@ const novoFrete = ref({
   destino: '',
   tipo_caminhao_necessario: 'Truk',
   retorno: false,
+  tipo_frete: 'principal',
+  frete_principal_id: null,
   status: 'Aguardando horario',
   valor_servico: null,
   observacoes: '',
@@ -131,6 +133,10 @@ function statusConfereFiltroFrete(status, filtro) {
   return status === filtro
 }
 
+function freteEhRetorno(frete) {
+  return frete?.tipo_frete === 'retorno'
+}
+
 function dataLocal(valor) {
   return new Date(`${valor}T00:00:00`)
 }
@@ -147,6 +153,7 @@ function dataConferePeriodoFretes(dataFrete) {
 
 const fretesFiltrados = computed(() => {
   return fretes.value.filter((frete) => {
+    if (freteEhRetorno(frete)) return false
     const dataConfere = dataConferePeriodoFretes(frete.data_coleta)
     const clienteConfere = filtroClienteFretes.value === 'Todos' || frete.cliente === filtroClienteFretes.value
     const statusConfere = statusConfereFiltroFrete(frete.status, filtroStatus.value)
@@ -167,11 +174,11 @@ const totais = computed(() => ({
   aguardando: fretesPorData.value.filter((frete) => frete.status === 'Aguardando horario').length,
   andamento: fretesPorData.value.filter((frete) => statusVisualFrete(frete.status) === 'Em andamento').length,
   concluidas: fretesPorData.value.filter((frete) => statusEhConcluido(frete.status)).length,
-  retorno: fretesPorData.value.filter((frete) => frete.retorno).length,
+  retorno: fretesPorData.value.filter((frete) => frete.retorno && !freteEhRetorno(frete)).length,
 }))
 
 const fretesEmAberto = computed(() => {
-  return fretes.value.filter((frete) => !statusEhConcluido(frete.status) && frete.status !== STATUS_CANCELADA)
+  return fretes.value.filter((frete) => !freteEhRetorno(frete) && !statusEhConcluido(frete.status) && frete.status !== STATUS_CANCELADA)
 })
 
 const fretesAbertosPorVeiculo = computed(() => {
@@ -227,6 +234,7 @@ const totaisVeiculos = computed(() => ({
 
 const fretesPorData = computed(() => {
   return fretes.value.filter((frete) => {
+    if (freteEhRetorno(frete)) return false
     const dataConfere = dataConferePeriodoFretes(frete.data_coleta)
     const clienteConfere = filtroClienteFretes.value === 'Todos' || frete.cliente === filtroClienteFretes.value
     return dataConfere && clienteConfere
@@ -258,7 +266,7 @@ const empresasOrigemDisponiveis = computed(() => buscarEmpresasPorTermo(buscaOri
 const empresasDestinoDisponiveis = computed(() => buscarEmpresasPorTermo(buscaDestinoFrete.value, novoFrete.value.destino))
 
 const fretesConcluidos = computed(() => {
-  return fretes.value.filter((frete) => statusEhConcluido(frete.status))
+  return fretes.value.filter((frete) => statusEhConcluido(frete.status) && !freteEhRetorno(frete))
 })
 
 const fretesConcluidosFiltrados = computed(() => {
@@ -300,7 +308,9 @@ const fretesConcluidosFiltrados = computed(() => {
 })
 
 const totalConcluido = computed(() => {
-  return fretesConcluidosFiltrados.value.reduce((total, frete) => total + Number(frete.valor_servico || 0), 0)
+  return fretesConcluidosFiltrados.value.reduce((total, frete) => {
+    return total + Number(frete.valor_servico || 0) + Number(frete.valor_retorno || 0) + Number(frete.valor_ponto_adicional || 0)
+  }, 0)
 })
 
 const pontosAdicionaisFrete = (frete) => {
@@ -475,7 +485,7 @@ const moverFreteParaStatus = async (frete, status) => {
 const resumoStatusEdscha = (frete) => {
   if (frete.status === STATUS_AGUARDANDO) return 'aguardando horario'
   if (frete.status === STATUS_CAMINHO_P1) return `a caminho ${frete.origem}`
-  if (frete.status === STATUS_COLETADO_P1) return 'aguardando coleta P1'
+  if (frete.status === STATUS_COLETADO_P1) return `aguardando coleta ${frete.origem}`
   if (frete.status === STATUS_CAMINHO_PONTO_ADICIONAL) return 'a caminho ponto adicional'
   if (statusEhPontoAdicional(frete.status)) return 'pontos adicionais coletados'
   if (frete.status === STATUS_CAMINHO_DESTINO) return `coletado ${frete.origem}, a caminho do destino`
@@ -493,7 +503,7 @@ const linhaAtualizacaoEdscha = (frete) => {
 }
 
 const gerarAtualizacaoEdscha = () => {
-  const fretesAtualizacao = fretesFiltrados.value.filter((frete) => frete.status !== 'Cancelada')
+  const fretesAtualizacao = fretesFiltrados.value.filter((frete) => frete.status !== 'Cancelada' && !freteEhRetorno(frete))
 
   if (fretesAtualizacao.length === 0) {
     mostrarToast('Nao ha fretes para atualizar neste filtro.', 'error')
@@ -747,6 +757,8 @@ const cadastrarFrete = async () => {
     destino: '',
     tipo_caminhao_necessario: 'Truk',
     retorno: false,
+    tipo_frete: 'principal',
+    frete_principal_id: null,
     status: 'Aguardando horario',
     valor_servico: null,
     observacoes: '',
@@ -839,13 +851,20 @@ const salvarValorFrete = async (frete) => {
   await salvarComFeedback('Valor salvo com sucesso.', async () => {
     await axios.put(`${API_URL}/fretes/${frete.id}/valor`, {
       valor_servico: frete.valor_servico === '' || frete.valor_servico === null ? null : Number(frete.valor_servico),
+      valor_retorno: frete.valor_retorno === '' || frete.valor_retorno === null ? null : Number(frete.valor_retorno),
+      valor_ponto_adicional: frete.valor_ponto_adicional === '' || frete.valor_ponto_adicional === null ? null : Number(frete.valor_ponto_adicional),
     })
     await carregarTudo()
   })
 }
 
 const salvarValoresConcluidosFiltrados = async () => {
-  const fretesComValor = fretesConcluidosFiltrados.value.filter((frete) => frete.valor_servico !== '' && frete.valor_servico !== null)
+  const fretesComValor = fretesConcluidosFiltrados.value.filter((frete) => {
+    const temValorServico = frete.valor_servico !== '' && frete.valor_servico !== null
+    const temValorRetorno = frete.valor_retorno !== '' && frete.valor_retorno !== null
+    const temValorPontoAdicional = frete.valor_ponto_adicional !== '' && frete.valor_ponto_adicional !== null
+    return temValorServico || temValorRetorno || temValorPontoAdicional
+  })
 
   if (fretesComValor.length === 0) {
     mostrarToast('Preencha pelo menos um valor antes de salvar.', 'error')
@@ -856,7 +875,10 @@ const salvarValoresConcluidosFiltrados = async () => {
     await Promise.all(
       fretesComValor.map((frete) =>
         axios.put(`${API_URL}/fretes/${frete.id}/valor`, {
-          valor_servico: Number(frete.valor_servico),
+          valor_servico: frete.valor_servico === '' || frete.valor_servico === null ? null : Number(frete.valor_servico),
+          valor_retorno: frete.valor_retorno === '' || frete.valor_retorno === null ? null : Number(frete.valor_retorno),
+          valor_ponto_adicional:
+            frete.valor_ponto_adicional === '' || frete.valor_ponto_adicional === null ? null : Number(frete.valor_ponto_adicional),
         }),
       ),
     )
@@ -1197,7 +1219,7 @@ onMounted(carregarTudo)
                 <div class="kanban-mini-details">
                   <span>{{ frete.tipo_caminhao_necessario }}</span>
                   <span>{{ placaVeiculo(frete.veiculo_id) }}</span>
-                  <span v-if="frete.retorno">Retorno</span>
+                  <span v-if="frete.retorno">Gera retorno</span>
                   <span>{{ freteAbertoId === frete.id ? 'Fechar' : 'Detalhes' }}</span>
                 </div>
               </div>
@@ -1426,6 +1448,22 @@ onMounted(carregarTudo)
             <strong>{{ formatarMoeda(frete.valor_servico) }}</strong>
             <button type="button" @click="salvarValorFrete(frete)">Salvar valor</button>
           </div>
+          <div v-if="frete.retorno" class="value-row">
+            <label class="field">
+              Valor do retorno
+              <input v-model="frete.valor_retorno" type="number" min="0" step="0.01" placeholder="0,00" />
+            </label>
+            <strong>{{ formatarMoeda(frete.valor_retorno) }}</strong>
+            <button type="button" @click="salvarValorFrete(frete)">Salvar retorno</button>
+          </div>
+          <div v-if="pontosAdicionaisFrete(frete).length > 0" class="value-row">
+            <label class="field">
+              Valor do ponto adicional
+              <input v-model="frete.valor_ponto_adicional" type="number" min="0" step="0.01" placeholder="0,00" />
+            </label>
+            <strong>{{ formatarMoeda(frete.valor_ponto_adicional) }}</strong>
+            <button type="button" @click="salvarValorFrete(frete)">Salvar ponto</button>
+          </div>
         </article>
 
         <p v-if="fretesConcluidosFiltrados.length === 0" class="empty">Nenhum frete concluido para este periodo.</p>
@@ -1538,7 +1576,7 @@ onMounted(carregarTudo)
           <input v-model="buscaOrigemFrete" :placeholder="novoFrete.origem || 'Buscar empresa de origem'" />
           <div v-if="buscaOrigemFrete" class="picker-results">
             <button v-for="empresa in empresasOrigemDisponiveis" :key="empresa.id" class="picker-option" type="button" @click="selecionarOrigemFrete(empresa)">
-              {{ empresa.nome }}<small>{{ enderecoEmpresa(empresa) }}</small>
+              {{ empresa.nome }}<small>{{ empresa.cnpj || 'CNPJ nao informado' }}</small>
             </button>
             <p v-if="empresasOrigemDisponiveis.length === 0">Nenhuma empresa encontrada.</p>
           </div>
@@ -1569,7 +1607,7 @@ onMounted(carregarTudo)
           <input v-model="buscaDestinoFrete" :placeholder="novoFrete.destino || 'Buscar empresa de destino'" />
           <div v-if="buscaDestinoFrete" class="picker-results">
             <button v-for="empresa in empresasDestinoDisponiveis" :key="empresa.id" class="picker-option" type="button" @click="selecionarDestinoFrete(empresa)">
-              {{ empresa.nome }}<small>{{ enderecoEmpresa(empresa) }}</small>
+              {{ empresa.nome }}<small>{{ empresa.cnpj || 'CNPJ nao informado' }}</small>
             </button>
             <p v-if="empresasDestinoDisponiveis.length === 0">Nenhuma empresa encontrada.</p>
           </div>
@@ -1586,7 +1624,7 @@ onMounted(carregarTudo)
           </select>
         </label>
         <label class="field">Valor do servico<input v-model="novoFrete.valor_servico" type="number" min="0" step="0.01" placeholder="Opcional" /></label>
-        <label class="check-field"><input v-model="novoFrete.retorno" type="checkbox" /> Tem retorno</label>
+        <label class="check-field"><input v-model="novoFrete.retorno" type="checkbox" /> Criar retorno para cobranca</label>
         <label class="field">Motorista<select v-model="novoFrete.motorista_id" required><option value="" disabled></option><option v-for="motorista in motoristas" :key="motorista.id" :value="motorista.id">{{ motorista.nome }}</option></select></label>
         <label class="field">Caminhao<select v-model="novoFrete.veiculo_id" required><option value="" disabled></option><option v-for="veiculo in veiculos" :key="veiculo.id" :value="veiculo.id">{{ veiculo.placa }} - {{ veiculo.tipo }}</option></select></label>
         <label class="field wide">Observacoes<textarea v-model="novoFrete.observacoes" rows="3"></textarea></label>

@@ -159,8 +159,12 @@ class FreteBase(BaseModel):
     destino: str
     tipo_caminhao_necessario: str
     retorno: bool = False
+    tipo_frete: str = "principal"
+    frete_principal_id: Optional[int] = None
     status: str = "Aguardando horario"
     valor_servico: Optional[float] = None
+    valor_retorno: Optional[float] = None
+    valor_ponto_adicional: Optional[float] = None
     observacoes: Optional[str] = None
     motorista_id: Optional[int] = None
     veiculo_id: Optional[int] = None
@@ -187,14 +191,20 @@ class FreteUpdate(BaseModel):
     destino: Optional[str] = None
     tipo_caminhao_necessario: Optional[str] = None
     retorno: Optional[bool] = None
+    tipo_frete: Optional[str] = None
+    frete_principal_id: Optional[int] = None
     status: Optional[str] = None
     valor_servico: Optional[float] = None
+    valor_retorno: Optional[float] = None
+    valor_ponto_adicional: Optional[float] = None
     observacoes: Optional[str] = None
     motorista_id: Optional[int] = None
     veiculo_id: Optional[int] = None
 
 class FreteValorUpdate(BaseModel):
     valor_servico: Optional[float] = None
+    valor_retorno: Optional[float] = None
+    valor_ponto_adicional: Optional[float] = None
 
 class FreteDocumentosUpdate(BaseModel):
     cte: Optional[str] = None
