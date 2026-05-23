@@ -1,6 +1,13 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import axios from 'axios'
+import logoAcelera from './assets/logoacelera.png'
+import iconFretes from './assets/icon-fretes.png'
+import iconCriarFrete from './assets/icon-criar-frete.png'
+import iconConcluidos from './assets/icon-concluidos.png'
+import iconCadastro from './assets/icon-cadastro.png'
+import iconMotorista from './assets/icon-motorista.png'
+import iconCaminhao from './assets/icon-caminhao.png'
 
 const API_URL = 'http://127.0.0.1:8000'
 const tiposVeiculo = ['Motoboy', 'Fiorino', 'Iveco', '3/4', 'Toco', 'Truk', 'Carreta']
@@ -54,11 +61,16 @@ const statusDestinoAtivo = ref('')
 const freteAbertoId = ref(null)
 const menuStatusFrete = ref({ aberto: false, x: 0, y: 0, frete: null })
 const filtroSituacaoVeiculo = ref('Todos')
+const filtroTipoVeiculo = ref('Todos')
 const veiculoIndisponibilidadeAberto = ref(null)
 const motivoIndisponibilidadeVeiculo = ref('')
 const motoristaEditandoId = ref(null)
 const veiculoEditandoId = ref(null)
 const empresaEditandoId = ref(null)
+const freteEditandoId = ref(null)
+const abaRetornoEdicaoFrete = ref('fretes')
+const sidebarRecolhida = ref(false)
+const menuMobileAberto = ref(false)
 
 const novoMotorista = ref({ nome: '', telefone: '', rg: '', cpf: '', cnh: '', observacoes: '' })
 const novoVeiculo = ref({ placa: '', tipo: 'Truk', observacoes: '' })
@@ -76,10 +88,10 @@ const novaEmpresa = ref({
   endereco: '',
   observacoes: '',
 })
-const novoFrete = ref({
+const criarFormularioFreteVazio = (dataColeta = new Date().toISOString().slice(0, 10)) => ({
   cliente: '',
   nota_fiscal: '',
-  data_coleta: new Date().toISOString().slice(0, 10),
+  data_coleta: dataColeta,
   horario_coleta: '',
   origem: '',
   empresas_coleta: [],
@@ -94,6 +106,50 @@ const novoFrete = ref({
   motorista_id: '',
   veiculo_id: '',
 })
+const novoFrete = ref(criarFormularioFreteVazio())
+
+const paginas = {
+  fretes: {
+    titulo: 'Fretes',
+    resumo: 'Escala operacional em Kanban.',
+  },
+  concluidos: {
+    titulo: 'Concluidos',
+    resumo: 'Fechamento financeiro dos servicos finalizados.',
+  },
+  caminhoes: {
+    titulo: 'Caminhoes',
+    resumo: 'Disponibilidade da frota na operacao.',
+  },
+  relatorios: {
+    titulo: 'Motoristas',
+    resumo: 'Status, escala e historico dos motoristas.',
+  },
+  'novo-frete': {
+    titulo: 'Novo frete',
+    resumo: 'Cadastro rapido para a proxima viagem.',
+  },
+  cadastros: {
+    titulo: 'Cadastros',
+    resumo: 'Motoristas, caminhoes e empresas.',
+  },
+}
+
+const paginaAtual = computed(() => {
+  if (aba.value === 'novo-frete' && freteEditandoId.value) {
+    return {
+      titulo: 'Editar frete',
+      resumo: 'Atualize os dados operacionais do frete criado.',
+    }
+  }
+  return paginas[aba.value] || paginas.fretes
+})
+
+const abrirPagina = (pagina, cadastro = null) => {
+  aba.value = pagina
+  if (cadastro) cadastroAtivo.value = cadastro
+  menuMobileAberto.value = false
+}
 
 const carregarTudo = async () => {
   carregando.value = true
@@ -221,7 +277,9 @@ const fretesUsoMotorista = (motorista) => fretesAbertosPorMotorista.value[motori
 
 const veiculosFiltrados = computed(() => {
   return veiculos.value.filter((veiculo) => {
-    return filtroSituacaoVeiculo.value === 'Todos' || situacaoVeiculo(veiculo) === filtroSituacaoVeiculo.value
+    const situacaoConfere = filtroSituacaoVeiculo.value === 'Todos' || situacaoVeiculo(veiculo) === filtroSituacaoVeiculo.value
+    const tipoConfere = filtroTipoVeiculo.value === 'Todos' || veiculo.tipo === filtroTipoVeiculo.value
+    return situacaoConfere && tipoConfere
   })
 })
 
@@ -491,7 +549,7 @@ const resumoStatusEdscha = (frete) => {
   if (frete.status === STATUS_CAMINHO_DESTINO) return `coletado ${frete.origem}, a caminho do destino`
   if (frete.status === STATUS_CHEGADA_DESTINO) return `chegada no destino ${frete.destino}`
   if (frete.status === STATUS_RETORNANDO) return 'retornando'
-  if (statusEhConcluido(frete.status)) return 'concluido'
+  if (statusEhConcluido(frete.status)) return '✅'
   if (frete.status === STATUS_CANCELADA) return 'cancelado'
   return statusVisualFrete(frete.status).toLowerCase()
 }
@@ -618,6 +676,55 @@ const limparEmpresa = () => {
   }
 }
 
+const limparFormularioFrete = () => {
+  freteEditandoId.value = null
+  novoFrete.value = criarFormularioFreteVazio(filtroDataInicioFretes.value || new Date().toISOString().slice(0, 10))
+  buscaOrigemFrete.value = ''
+  buscaEmpresaColeta.value = ''
+  buscaDestinoFrete.value = ''
+}
+
+const abrirNovoFrete = () => {
+  abaRetornoEdicaoFrete.value = 'fretes'
+  limparFormularioFrete()
+  abrirPagina('novo-frete')
+}
+
+const cancelarEdicaoFrete = () => {
+  const abaRetorno = abaRetornoEdicaoFrete.value
+  limparFormularioFrete()
+  abrirPagina(abaRetorno)
+}
+
+const editarFrete = (frete) => {
+  abaRetornoEdicaoFrete.value = aba.value
+  freteEditandoId.value = frete.id
+  novoFrete.value = {
+    cliente: frete.cliente || '',
+    nota_fiscal: frete.nota_fiscal || '',
+    data_coleta: frete.data_coleta || new Date().toISOString().slice(0, 10),
+    horario_coleta: frete.horario_coleta?.slice(0, 5) || '',
+    origem: frete.origem || '',
+    empresas_coleta: pontosAdicionaisFrete(frete),
+    destino: frete.destino || '',
+    tipo_caminhao_necessario: frete.tipo_caminhao_necessario || 'Truk',
+    retorno: Boolean(frete.retorno),
+    tipo_frete: frete.tipo_frete || 'principal',
+    frete_principal_id: frete.frete_principal_id || null,
+    status: frete.status || STATUS_AGUARDANDO,
+    valor_servico: frete.valor_servico ?? null,
+    observacoes: frete.observacoes || '',
+    motorista_id: frete.motorista_id || '',
+    veiculo_id: frete.veiculo_id || '',
+  }
+  buscaOrigemFrete.value = ''
+  buscaEmpresaColeta.value = ''
+  buscaDestinoFrete.value = ''
+  freteAbertoId.value = null
+  fecharMenuStatusFrete()
+  abrirPagina('novo-frete')
+}
+
 const editarMotorista = (motorista) => {
   motoristaEditandoId.value = motorista.id
   novoMotorista.value = {
@@ -733,38 +840,43 @@ const buscarCepEmpresa = async () => {
   novaEmpresa.value.uf = dados.uf || ''
 }
 
+const payloadFormularioFrete = () => ({
+  cliente: novoFrete.value.cliente,
+  nota_fiscal: novoFrete.value.nota_fiscal || null,
+  data_coleta: novoFrete.value.data_coleta,
+  horario_coleta: novoFrete.value.horario_coleta,
+  origem: novoFrete.value.origem,
+  destino: novoFrete.value.destino,
+  tipo_caminhao_necessario: novoFrete.value.tipo_caminhao_necessario,
+  retorno: Boolean(novoFrete.value.retorno),
+  observacoes: novoFrete.value.observacoes || null,
+  empresas_coleta: Array.isArray(novoFrete.value.empresas_coleta)
+    ? novoFrete.value.empresas_coleta.join(', ')
+    : novoFrete.value.empresas_coleta,
+  motorista_id: novoFrete.value.motorista_id ? Number(novoFrete.value.motorista_id) : null,
+  veiculo_id: novoFrete.value.veiculo_id ? Number(novoFrete.value.veiculo_id) : null,
+  valor_servico:
+    novoFrete.value.valor_servico === '' || novoFrete.value.valor_servico === null
+      ? null
+      : Number(novoFrete.value.valor_servico),
+})
+
 const cadastrarFrete = async () => {
-  const payload = {
-    ...novoFrete.value,
-    empresas_coleta: Array.isArray(novoFrete.value.empresas_coleta)
-      ? novoFrete.value.empresas_coleta.join(', ')
-      : novoFrete.value.empresas_coleta,
-    motorista_id: novoFrete.value.motorista_id ? Number(novoFrete.value.motorista_id) : null,
-    veiculo_id: novoFrete.value.veiculo_id ? Number(novoFrete.value.veiculo_id) : null,
-    valor_servico:
-      novoFrete.value.valor_servico === '' || novoFrete.value.valor_servico === null
-        ? null
-        : Number(novoFrete.value.valor_servico),
+  const payload = payloadFormularioFrete()
+
+  if (freteEditandoId.value) {
+    const abaRetorno = abaRetornoEdicaoFrete.value
+    await salvarComFeedback('Frete atualizado com sucesso.', async () => {
+      await axios.put(`${API_URL}/fretes/${freteEditandoId.value}`, payload)
+      limparFormularioFrete()
+      abrirPagina(abaRetorno)
+      await carregarTudo()
+    })
+    return
   }
+
   await axios.post(`${API_URL}/fretes/`, payload)
-  novoFrete.value = {
-    cliente: '',
-    nota_fiscal: '',
-    data_coleta: filtroDataInicioFretes.value || new Date().toISOString().slice(0, 10),
-    horario_coleta: '',
-    origem: '',
-    empresas_coleta: [],
-    destino: '',
-    tipo_caminhao_necessario: 'Truk',
-    retorno: false,
-    tipo_frete: 'principal',
-    frete_principal_id: null,
-    status: 'Aguardando horario',
-    valor_servico: null,
-    observacoes: '',
-    motorista_id: '',
-    veiculo_id: '',
-  }
+  limparFormularioFrete()
   aba.value = 'fretes'
   await carregarTudo()
 }
@@ -847,13 +959,16 @@ const soltarFreteEmStatus = async (event, status) => {
   encerrarArrastoFrete()
 }
 
+const valorFretePayload = (frete) => ({
+  valor_servico: frete.valor_servico === '' || frete.valor_servico === null ? null : Number(frete.valor_servico),
+  valor_retorno: frete.valor_retorno === '' || frete.valor_retorno === null ? null : Number(frete.valor_retorno),
+  valor_ponto_adicional:
+    frete.valor_ponto_adicional === '' || frete.valor_ponto_adicional === null ? null : Number(frete.valor_ponto_adicional),
+})
+
 const salvarValorFrete = async (frete) => {
   await salvarComFeedback('Valor salvo com sucesso.', async () => {
-    await axios.put(`${API_URL}/fretes/${frete.id}/valor`, {
-      valor_servico: frete.valor_servico === '' || frete.valor_servico === null ? null : Number(frete.valor_servico),
-      valor_retorno: frete.valor_retorno === '' || frete.valor_retorno === null ? null : Number(frete.valor_retorno),
-      valor_ponto_adicional: frete.valor_ponto_adicional === '' || frete.valor_ponto_adicional === null ? null : Number(frete.valor_ponto_adicional),
-    })
+    await axios.put(`${API_URL}/fretes/${frete.id}/valor`, valorFretePayload(frete))
     await carregarTudo()
   })
 }
@@ -874,12 +989,7 @@ const salvarValoresConcluidosFiltrados = async () => {
   await salvarComFeedback(`${fretesComValor.length} valores salvos com sucesso.`, async () => {
     await Promise.all(
       fretesComValor.map((frete) =>
-        axios.put(`${API_URL}/fretes/${frete.id}/valor`, {
-          valor_servico: frete.valor_servico === '' || frete.valor_servico === null ? null : Number(frete.valor_servico),
-          valor_retorno: frete.valor_retorno === '' || frete.valor_retorno === null ? null : Number(frete.valor_retorno),
-          valor_ponto_adicional:
-            frete.valor_ponto_adicional === '' || frete.valor_ponto_adicional === null ? null : Number(frete.valor_ponto_adicional),
-        }),
+        axios.put(`${API_URL}/fretes/${frete.id}/valor`, valorFretePayload(frete)),
       ),
     )
     await carregarTudo()
@@ -901,6 +1011,39 @@ const salvarNotaFiscalFrete = async (frete) => {
     await axios.put(`${API_URL}/fretes/${frete.id}/nota-fiscal`, {
       nota_fiscal: frete.nota_fiscal || null,
     })
+    await carregarTudo()
+  })
+}
+
+const valorPreenchido = (valor) => valor !== '' && valor !== null && valor !== undefined
+const textoPreenchido = (valor) => String(valor || '').trim().length > 0
+
+const salvarValorPreenchidoFrete = async (frete, campo) => {
+  if (!valorPreenchido(frete[campo])) return
+  await salvarValorFrete(frete)
+}
+
+const salvarDocumentoPreenchidoFrete = async (frete, campo) => {
+  if (!textoPreenchido(frete[campo])) return
+  if (campo === 'nota_fiscal') {
+    await salvarNotaFiscalFrete(frete)
+    return
+  }
+  await salvarDocumentosFrete(frete)
+}
+
+const salvarFechamentoFrete = async (frete) => {
+  await salvarComFeedback('Fechamento salvo com sucesso.', async () => {
+    await Promise.all([
+      axios.put(`${API_URL}/fretes/${frete.id}/valor`, valorFretePayload(frete)),
+      axios.put(`${API_URL}/fretes/${frete.id}/documentos`, {
+        cte: frete.cte || null,
+        oc: frete.oc || null,
+      }),
+      axios.put(`${API_URL}/fretes/${frete.id}/nota-fiscal`, {
+        nota_fiscal: frete.nota_fiscal || null,
+      }),
+    ])
     await carregarTudo()
   })
 }
@@ -1103,24 +1246,88 @@ onMounted(carregarTudo)
 </script>
 
 <template>
-  <main class="app-shell">
+  <main class="app-shell" :class="{ 'sidebar-collapsed': sidebarRecolhida }">
     <div v-if="toast" class="toast" :class="toast.tipo">
       {{ toast.mensagem }}
     </div>
 
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">Acelera Transportes</p>
-        <h1>Controle de fretes</h1>
+    <aside class="app-sidebar" :class="{ collapsed: sidebarRecolhida, open: menuMobileAberto }">
+      <div class="sidebar-brand">
+        <img :src="logoAcelera" alt="Acelera Transportes" />
+        <div class="sidebar-brand-copy">
+          <p>Acelera</p>
+          <strong>Transportes</strong>
+        </div>
+        <button
+          class="icon-button sidebar-mobile-close"
+          type="button"
+          title="Fechar menu"
+          aria-label="Fechar menu"
+          @click="menuMobileAberto = false"
+        >
+          x
+        </button>
       </div>
-      <button class="ghost-button" type="button" @click="carregarTudo">
-        Atualizar
+
+      <nav class="sidebar-nav" aria-label="Navegacao principal">
+        <button title="Fretes" :class="{ active: aba === 'fretes' }" type="button" @click="abrirPagina('fretes')">
+          <span class="nav-icon"><img :src="iconFretes" alt="" /></span>
+          <span><strong>Fretes</strong><small>FRETES</small></span>
+        </button>
+        <button title="Concluidos" :class="{ active: aba === 'concluidos' }" type="button" @click="abrirPagina('concluidos')">
+          <span class="nav-icon"><img :src="iconConcluidos" alt="" /></span>
+          <span><strong>Concluidos</strong><small>CONCLUIDOS</small></span>
+        </button>
+        <button title="Caminhoes" :class="{ active: aba === 'caminhoes' }" type="button" @click="abrirPagina('caminhoes')">
+          <span class="nav-icon"><img :src="iconCaminhao" alt="" /></span>
+          <span><strong>Caminhoes</strong><small>CAMINHAO</small></span>
+        </button>
+        <button title="Motoristas" :class="{ active: aba === 'relatorios' }" type="button" @click="abrirPagina('relatorios')">
+          <span class="nav-icon"><img :src="iconMotorista" alt="" /></span>
+          <span><strong>Motoristas</strong><small>MOTORISTA</small></span>
+        </button>
+        <button title="Novo frete" :class="{ active: aba === 'novo-frete' }" type="button" @click="abrirNovoFrete">
+          <span class="nav-icon"><img :src="iconCriarFrete" alt="" /></span>
+          <span><strong>Novo frete</strong><small>CRIAR FRETE</small></span>
+        </button>
+        <button title="Cadastros" :class="{ active: aba === 'cadastros' }" type="button" @click="abrirPagina('cadastros', 'motoristas')">
+          <span class="nav-icon"><img :src="iconCadastro" alt="" /></span>
+          <span><strong>Cadastros</strong><small>CADASTRO</small></span>
+        </button>
+      </nav>
+
+      <button
+        class="sidebar-collapse"
+        type="button"
+        :title="sidebarRecolhida ? 'Expandir menu' : 'Recolher menu'"
+        :aria-label="sidebarRecolhida ? 'Expandir menu' : 'Recolher menu'"
+        @click="sidebarRecolhida = !sidebarRecolhida"
+      >
+        <span aria-hidden="true">{{ sidebarRecolhida ? '>' : '<' }}</span>
+        <strong>{{ sidebarRecolhida ? 'Expandir' : 'Recolher' }}</strong>
       </button>
-    </header>
+    </aside>
 
-    <section v-if="erro" class="alert">{{ erro }}</section>
+    <button v-if="menuMobileAberto" class="sidebar-scrim" type="button" aria-label="Fechar menu" @click="menuMobileAberto = false"></button>
 
-    <div class="nav-groups">
+    <div class="content-shell">
+      <header class="topbar">
+        <button class="mobile-menu-button" type="button" @click="menuMobileAberto = true">
+          <span aria-hidden="true"></span>
+          Menu
+        </button>
+        <div>
+          <p class="eyebrow">{{ paginaAtual.resumo }}</p>
+          <h1>{{ paginaAtual.titulo }}</h1>
+        </div>
+        <button class="ghost-button refresh-button" type="button" @click="carregarTudo">
+          Atualizar
+        </button>
+      </header>
+
+      <section v-if="erro" class="alert">{{ erro }}</section>
+
+    <div v-if="false" class="nav-groups">
       <nav class="tabs" aria-label="Visualizacao e operacao">
         <button :class="{ active: aba === 'fretes' }" type="button" @click="aba = 'fretes'">Fretes</button>
         <button :class="{ active: aba === 'concluidos' }" type="button" @click="aba = 'concluidos'">Concluidos</button>
@@ -1135,36 +1342,40 @@ onMounted(carregarTudo)
     </div>
 
     <section v-if="aba === 'fretes'" class="workspace">
-      <div class="section-head">
+      <div class="section-head freight-toolbar">
         <div>
           <h2>Escala diaria</h2>
           <p>Fretes cadastrados, alocacao e status da viagem.</p>
         </div>
-        <button class="update-button" type="button" @click="copiarAtualizacaoEdscha">
-          Copiar atualizacao Edscha
-        </button>
-        <label class="field compact">
-          Data inicio
-          <input v-model="filtroDataInicioFretes" type="date" />
-        </label>
-        <label class="field compact">
-          Data fim
-          <input v-model="filtroDataFimFretes" type="date" />
-        </label>
-        <label class="field compact">
-          Cliente
-          <select v-model="filtroClienteFretes">
-            <option value="Todos">Todos</option>
-            <option v-for="empresa in empresasClientes" :key="empresa.id" :value="empresa.nome">{{ empresa.nome }}</option>
-          </select>
-        </label>
-        <label class="field compact">
-          Status
-          <select v-model="filtroStatus">
-            <option value="Todos">Todos</option>
-            <option v-for="status in statusFiltroFrete" :key="status" :value="status">{{ rotuloStatusFrete(status) }}</option>
-          </select>
-        </label>
+        <div class="freight-toolbar-controls">
+          <button class="update-button" type="button" @click="copiarAtualizacaoEdscha">
+            Copiar atualizacao Edscha
+          </button>
+          <div class="freight-filters">
+            <label class="field compact">
+              Data inicio
+              <input v-model="filtroDataInicioFretes" type="date" />
+            </label>
+            <label class="field compact">
+              Data fim
+              <input v-model="filtroDataFimFretes" type="date" />
+            </label>
+            <label class="field compact">
+              Cliente
+              <select v-model="filtroClienteFretes">
+                <option value="Todos">Todos</option>
+                <option v-for="empresa in empresasClientes" :key="empresa.id" :value="empresa.nome">{{ empresa.nome }}</option>
+              </select>
+            </label>
+            <label class="field compact">
+              Status
+              <select v-model="filtroStatus">
+                <option value="Todos">Todos</option>
+                <option v-for="status in statusFiltroFrete" :key="status" :value="status">{{ rotuloStatusFrete(status) }}</option>
+              </select>
+            </label>
+          </div>
+        </div>
       </div>
 
       <div class="metrics">
@@ -1262,6 +1473,7 @@ onMounted(carregarTudo)
                   <button class="secondary status-move-button" type="button" @click="abrirMenuStatusFrete($event, frete)">Mover status</button>
                   <button class="secondary" type="button" @click="salvarValorFrete(frete)">Salvar valor</button>
                   <button class="secondary" type="button" @click="salvarNotaFiscalFrete(frete)">Salvar NF</button>
+                  <button class="secondary" type="button" @click="editarFrete(frete)">Editar frete</button>
                   <button class="secondary" type="button" @click="copiarMensagem(frete)">Copiar mensagem</button>
                   <button class="secondary" type="button" @click="abrirWhatsApp(frete)">WhatsApp</button>
                   <button class="danger" type="button" @click="excluirFrete(frete.id)">Excluir</button>
@@ -1422,47 +1634,64 @@ onMounted(carregarTudo)
             <span class="badge concluida">concluido</span>
           </div>
 
-          <div class="value-row">
-            <label class="field">
+          <div class="billing-grid">
+            <label class="field billing-field">
               Nota fiscal
-              <input v-model="frete.nota_fiscal" placeholder="Numero da nota fiscal" />
+              <input
+                v-model="frete.nota_fiscal"
+                placeholder="Numero da nota fiscal"
+                @change="salvarDocumentoPreenchidoFrete(frete, 'nota_fiscal')"
+              />
             </label>
-            <strong>{{ frete.nota_fiscal || 'Sem nota' }}</strong>
-            <button class="secondary" type="button" @click="salvarNotaFiscalFrete(frete)">Salvar NF</button>
-          </div>
-
-          <div class="value-row oc-row">
-            <label class="field">
+            <label class="field billing-field">
               OC
-              <input v-model="frete.oc" placeholder="Numero da OC" />
+              <input v-model="frete.oc" placeholder="Numero da OC" @change="salvarDocumentoPreenchidoFrete(frete, 'oc')" />
             </label>
-            <strong>{{ frete.oc || 'Sem OC' }}</strong>
-            <button class="secondary" type="button" @click="salvarDocumentosFrete(frete)">Salvar OC</button>
+            <label class="field billing-field">
+              Valor do servico
+              <input
+                v-model="frete.valor_servico"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0,00"
+                @change="salvarValorPreenchidoFrete(frete, 'valor_servico')"
+              />
+            </label>
+            <label v-if="frete.retorno" class="field billing-field">
+              Valor do retorno
+              <input
+                v-model="frete.valor_retorno"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0,00"
+                @change="salvarValorPreenchidoFrete(frete, 'valor_retorno')"
+              />
+            </label>
+            <label v-if="pontosAdicionaisFrete(frete).length > 0" class="field billing-field">
+              Valor do ponto adicional
+              <input
+                v-model="frete.valor_ponto_adicional"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0,00"
+                @change="salvarValorPreenchidoFrete(frete, 'valor_ponto_adicional')"
+              />
+            </label>
           </div>
 
-          <div class="value-row">
-            <label class="field">
-              Valor do servico
-              <input v-model="frete.valor_servico" type="number" min="0" step="0.01" placeholder="0,00" />
-            </label>
-            <strong>{{ formatarMoeda(frete.valor_servico) }}</strong>
-            <button type="button" @click="salvarValorFrete(frete)">Salvar valor</button>
-          </div>
-          <div v-if="frete.retorno" class="value-row">
-            <label class="field">
-              Valor do retorno
-              <input v-model="frete.valor_retorno" type="number" min="0" step="0.01" placeholder="0,00" />
-            </label>
-            <strong>{{ formatarMoeda(frete.valor_retorno) }}</strong>
-            <button type="button" @click="salvarValorFrete(frete)">Salvar retorno</button>
-          </div>
-          <div v-if="pontosAdicionaisFrete(frete).length > 0" class="value-row">
-            <label class="field">
-              Valor do ponto adicional
-              <input v-model="frete.valor_ponto_adicional" type="number" min="0" step="0.01" placeholder="0,00" />
-            </label>
-            <strong>{{ formatarMoeda(frete.valor_ponto_adicional) }}</strong>
-            <button type="button" @click="salvarValorFrete(frete)">Salvar ponto</button>
+          <div class="concluded-card-footer">
+            <div class="billing-summary">
+              <span>Servico: {{ formatarMoeda(frete.valor_servico) }}</span>
+              <span v-if="frete.retorno">Retorno: {{ formatarMoeda(frete.valor_retorno) }}</span>
+              <span v-if="pontosAdicionaisFrete(frete).length > 0">Ponto: {{ formatarMoeda(frete.valor_ponto_adicional) }}</span>
+            </div>
+            <div class="concluded-card-actions">
+              <button class="secondary" type="button" @click="editarFrete(frete)">Editar frete</button>
+              <button type="button" @click="salvarFechamentoFrete(frete)">Salvar fechamento</button>
+            </div>
           </div>
         </article>
 
@@ -1485,6 +1714,13 @@ onMounted(carregarTudo)
             <option value="Indisponivel">Indisponiveis</option>
           </select>
         </label>
+        <label class="field compact">
+          Tipo
+          <select v-model="filtroTipoVeiculo">
+            <option value="Todos">Todos</option>
+            <option v-for="tipo in tiposVeiculo" :key="tipo" :value="tipo">{{ tipo }}</option>
+          </select>
+        </label>
       </div>
 
       <div class="metrics fleet-metrics">
@@ -1498,8 +1734,8 @@ onMounted(carregarTudo)
         <article v-for="veiculo in veiculosFiltrados" :key="veiculo.id" class="vehicle-card" :class="classeSituacaoVeiculo(veiculo)">
           <div class="vehicle-card-head">
             <div>
-              <h3>{{ veiculo.placa }}</h3>
-              <p>{{ veiculo.tipo }}</p>
+              <h3>{{ veiculo.tipo }}</h3>
+              <p>{{ veiculo.placa }}</p>
               <small v-if="veiculo.observacoes" class="vehicle-feature">{{ veiculo.observacoes }}</small>
             </div>
             <span class="vehicle-status">{{ situacaoVeiculo(veiculo) }}</span>
@@ -1555,8 +1791,8 @@ onMounted(carregarTudo)
     <section v-if="aba === 'novo-frete'" class="workspace">
       <div class="section-head">
         <div>
-          <h2>Cadastrar frete</h2>
-          <p>Use para fretes recebidos por planilha ou WhatsApp.</p>
+          <h2>{{ freteEditandoId ? 'Editar frete' : 'Cadastrar frete' }}</h2>
+          <p>{{ freteEditandoId ? 'Ajuste os dados do frete e salve as alteracoes.' : 'Use para fretes recebidos por planilha ou WhatsApp.' }}</p>
         </div>
       </div>
 
@@ -1628,7 +1864,10 @@ onMounted(carregarTudo)
         <label class="field">Motorista<select v-model="novoFrete.motorista_id" required><option value="" disabled></option><option v-for="motorista in motoristas" :key="motorista.id" :value="motorista.id">{{ motorista.nome }}</option></select></label>
         <label class="field">Caminhao<select v-model="novoFrete.veiculo_id" required><option value="" disabled></option><option v-for="veiculo in veiculos" :key="veiculo.id" :value="veiculo.id">{{ veiculo.placa }} - {{ veiculo.tipo }}</option></select></label>
         <label class="field wide">Observacoes<textarea v-model="novoFrete.observacoes" rows="3"></textarea></label>
-        <button type="submit">Cadastrar frete</button>
+        <div class="form-actions freight-form-actions">
+          <button type="submit">{{ freteEditandoId ? 'Salvar alteracoes' : 'Cadastrar frete' }}</button>
+          <button v-if="freteEditandoId" class="secondary" type="button" @click="cancelarEdicaoFrete">Cancelar edicao</button>
+        </div>
       </form>
     </section>
 
@@ -1804,5 +2043,6 @@ onMounted(carregarTudo)
         </article>
       </div>
     </section>
+    </div>
   </main>
 </template>
