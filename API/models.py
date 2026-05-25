@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, Time, ForeignKey, Text, Float
+from sqlalchemy import Column, Integer, String, Boolean, Date, Time, DateTime, ForeignKey, Text, Float, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -17,9 +17,10 @@ class Motorista(Base):
 
 class Veiculo(Base):
     __tablename__ = "veiculos"
+    __table_args__ = (UniqueConstraint("placa", "tipo", name="uq_veiculos_placa_tipo"),)
     
     id = Column(Integer, primary_key=True, index=True)
-    placa = Column(String, unique=True, nullable=False)
+    placa = Column(String, nullable=False)
     tipo = Column(String, nullable=False)
     observacoes = Column(Text, nullable=True)
     motivo_indisponibilidade = Column(Text, nullable=True)
@@ -67,6 +68,15 @@ class Frete(Base):
     valor_ponto_adicional = Column(Float, nullable=True)
     observacoes = Column(Text, nullable=True)
     pontoAdicional = Column(Boolean, default=False)
+    checklist_token = Column(String, nullable=True, index=True)
+    checklist_tacografo = Column(Boolean, default=False)
+    checklist_pneus = Column(Boolean, default=False)
+    checklist_oleo = Column(Boolean, default=False)
+    checklist_avarias_externas = Column(Boolean, default=False)
+    checklist_avarias_internas = Column(Boolean, default=False)
+    checklist_confirmado = Column(Boolean, default=False)
+    checklist_confirmado_em = Column(DateTime, nullable=True)
+    checklist_observacoes = Column(Text, nullable=True)
     
     motorista_id = Column(Integer, ForeignKey("motoristas.id"), nullable=True)
     veiculo_id = Column(Integer, ForeignKey("veiculos.id"), nullable=True)

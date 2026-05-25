@@ -28,6 +28,168 @@ body {
     linear-gradient(135deg, #f8fbf7 0%, var(--bg) 58%, #fff8e5 100%);
 }
 
+.checklist-public {
+  align-items: center;
+  display: grid;
+  min-height: 100vh;
+  padding: 18px;
+}
+
+.checklist-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 16px;
+  margin: 0 auto;
+  max-width: 520px;
+  padding: 18px;
+  width: 100%;
+}
+
+.checklist-brand {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 58px minmax(0, 1fr);
+}
+
+.checklist-brand img {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  object-fit: cover;
+  width: 58px;
+}
+
+.checklist-brand p,
+.checklist-muted,
+.checklist-trip small,
+.checklist-trip span {
+  color: var(--muted);
+}
+
+.checklist-brand h1 {
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.checklist-card,
+.checklist-options,
+.checklist-trip {
+  display: grid;
+  gap: 10px;
+}
+
+.checklist-trip {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.checklist-trip strong {
+  font-size: 20px;
+}
+
+.checklist-status {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  justify-self: start;
+  padding: 6px 10px;
+}
+
+.checklist-status.confirmed {
+  background: var(--primary-soft);
+  color: var(--ok);
+}
+
+.checklist-status.issue {
+  background: #f5dddd;
+  color: var(--danger);
+}
+
+.checklist-status.pending {
+  background: #fff4d8;
+  color: #7b4a00;
+}
+
+.checklist-option {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.checklist-option.checked {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.checklist-option.issue {
+  background: #fff5f5;
+  border-color: #ead0d0;
+}
+
+.checklist-choices {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.checklist-choice {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  font-weight: 900;
+  gap: 8px;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.checklist-choice.selected.ok {
+  background: var(--primary-soft);
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.checklist-choice.selected.issue {
+  background: #f5dddd;
+  border-color: #ead0d0;
+  color: var(--danger);
+}
+
+.checklist-choice input {
+  height: 20px;
+  width: 20px;
+}
+
+.checklist-notes {
+  display: grid;
+}
+
+.checklist-alert,
+.checklist-success {
+  border-radius: 8px;
+  font-weight: 800;
+  padding: 12px;
+}
+
+.checklist-alert {
+  background: #fde8e7;
+  color: var(--danger);
+}
+
+.checklist-success {
+  background: var(--primary-soft);
+  color: var(--ok);
+}
+
 button,
 input,
 select,
@@ -1173,10 +1335,6 @@ textarea {
   --column-accent: var(--ok);
 }
 
-.kanban-column.cancelada {
-  --column-accent: var(--danger);
-}
-
 .kanban-column.drop-active {
   border-color: var(--column-accent);
   box-shadow: 0 14px 34px rgba(24, 39, 33, 0.14);
@@ -1238,21 +1396,10 @@ textarea {
   border-color: #dce4df;
   box-shadow: 0 2px 8px rgba(24, 39, 33, 0.06);
   cursor: grab;
-  padding: 9px 10px 9px 12px;
+  padding: 9px 10px;
   position: relative;
   touch-action: pan-y;
   transition: box-shadow 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
-}
-
-.kanban-card::before {
-  background: var(--column-accent);
-  border-radius: 8px 0 0 8px;
-  bottom: 10px;
-  content: "";
-  left: -1px;
-  position: absolute;
-  top: 10px;
-  width: 4px;
 }
 
 .kanban-card.expanded {
@@ -1399,6 +1546,230 @@ textarea {
   text-align: center;
 }
 
+.freight-detail-backdrop {
+  align-items: flex-start;
+  background: rgba(16, 24, 21, 0.54);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  overflow: auto;
+  padding: 48px 16px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 60;
+}
+
+.freight-detail-modal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(16, 24, 21, 0.28);
+  color: var(--text);
+  max-width: 1080px;
+  overflow: hidden;
+  width: min(100%, 1080px);
+}
+
+.freight-detail-header {
+  align-items: flex-start;
+  background:
+    linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--primary-soft) 36%, #ffffff) 100%);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 20px 22px;
+}
+
+.freight-detail-kickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.freight-detail-header h2 {
+  font-size: 24px;
+  line-height: 1.18;
+  margin-top: 6px;
+}
+
+.freight-detail-header p,
+.freight-detail-note {
+  color: var(--muted);
+}
+
+.freight-detail-label {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 5px 8px;
+}
+
+.freight-detail-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  min-height: 360px;
+}
+
+.freight-detail-main,
+.freight-detail-side {
+  align-content: start;
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.freight-detail-side {
+  background: color-mix(in srgb, var(--surface-soft) 76%, #ffffff);
+  border-left: 1px solid var(--line);
+}
+
+.freight-detail-section {
+  display: grid;
+  gap: 10px;
+}
+
+.freight-detail-section h3 {
+  font-size: 15px;
+}
+
+.freight-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.freight-detail-tags span {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  padding: 6px 9px;
+}
+
+.freight-detail-side .freight-detail-tags span {
+  background: var(--surface);
+}
+
+.freight-detail-note {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 10px;
+}
+
+.freight-detail-overview {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.freight-detail-overview div,
+.freight-detail-panel,
+.freight-checklist-summary,
+.freight-route-step {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.freight-detail-overview div {
+  display: grid;
+  gap: 5px;
+  min-height: 76px;
+  padding: 12px;
+}
+
+.freight-detail-overview small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.freight-detail-overview strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.freight-route-steps {
+  display: grid;
+  gap: 8px;
+}
+
+.freight-route-step {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 10px;
+}
+
+.freight-route-step span {
+  align-items: center;
+  background: var(--primary);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  height: 26px;
+  justify-content: center;
+  width: 26px;
+}
+
+.freight-route-step strong {
+  overflow-wrap: anywhere;
+}
+
+.freight-checklist-summary {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.freight-checklist-summary p {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.freight-detail-panel {
+  padding: 12px;
+}
+
+.modal-allocation-grid,
+.freight-detail-actions {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr;
+}
+
+.modal-allocation-grid .field {
+  color: var(--muted);
+  font-size: 12px;
+  gap: 7px;
+}
+
+.modal-allocation-grid input,
+.modal-allocation-grid select {
+  min-height: 42px;
+}
+
+.freight-detail-actions button {
+  min-height: 40px;
+  width: 100%;
+}
+
 .kanban-context-backdrop {
   bottom: 0;
   left: 0;
@@ -1509,11 +1880,6 @@ textarea {
   color: #176087;
 }
 
-.badge.cancelada {
-  background: #f5dddd;
-  color: var(--danger);
-}
-
 .freight-details {
   flex-wrap: wrap;
   gap: 8px;
@@ -1585,8 +1951,10 @@ textarea {
   border: 1px solid var(--line);
   border-left: 7px solid var(--ok);
   border-radius: 8px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
+  min-height: 292px;
   padding: 16px;
 }
 
@@ -1608,9 +1976,14 @@ textarea {
 }
 
 .vehicle-card-head p {
-  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 88%, var(--primary-soft));
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line));
+  border-radius: 8px;
+  color: var(--primary-dark);
+  display: inline-flex;
   font-weight: 700;
   margin-top: 3px;
+  padding: 6px 9px;
 }
 
 .vehicle-feature {
@@ -1649,6 +2022,12 @@ textarea {
   color: var(--danger);
 }
 
+.vehicle-card-body {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 92px;
+}
+
 .vehicle-usage {
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--line);
@@ -1656,6 +2035,21 @@ textarea {
   display: grid;
   gap: 8px;
   padding: 10px;
+}
+
+.vehicle-usage-empty {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px dashed color-mix(in srgb, var(--line) 70%, var(--muted));
+  border-radius: 8px;
+  color: var(--muted);
+  display: flex;
+  font-size: 13px;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 92px;
+  padding: 10px;
+  text-align: center;
 }
 
 .vehicle-usage strong {
@@ -1697,7 +2091,13 @@ textarea {
 }
 
 .vehicle-actions {
+  flex: 0 0 auto;
   margin-top: 0;
+}
+
+.vehicle-actions button {
+  min-height: 42px;
+  width: 100%;
 }
 
 .modal-backdrop {
@@ -1925,8 +2325,10 @@ textarea {
   border: 1px solid var(--line);
   border-left: 7px solid var(--ok);
   border-radius: 8px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
+  min-height: 292px;
   padding: 16px;
 }
 
@@ -1989,18 +2391,45 @@ textarea {
 }
 
 .driver-stats span {
-  background: rgba(255, 255, 255, 0.72);
+  background: color-mix(in srgb, var(--surface) 88%, var(--primary-soft));
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line));
   border-radius: 8px;
   color: var(--muted);
   display: grid;
   font-size: 13px;
   font-weight: 800;
-  padding: 10px;
+  min-height: 74px;
+  padding: 11px 12px;
 }
 
 .driver-stats strong {
-  color: var(--text);
+  color: var(--primary-dark);
   font-size: 28px;
+  line-height: 1;
+}
+
+.driver-card.em-servico .driver-stats span {
+  background: #fff8e8;
+  border-color: color-mix(in srgb, var(--warning) 24%, var(--line));
+}
+
+.driver-card.em-servico .driver-stats strong {
+  color: #9a5a00;
+}
+
+.driver-card.indisponivel .driver-stats span {
+  background: #fff5f5;
+  border-color: #ead0d0;
+}
+
+.driver-card.indisponivel .driver-stats strong {
+  color: var(--danger);
+}
+
+.driver-card-body {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 92px;
 }
 
 .driver-active-freights {
@@ -2010,6 +2439,27 @@ textarea {
   display: grid;
   gap: 8px;
   padding: 10px;
+}
+
+.driver-active-empty {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px dashed color-mix(in srgb, var(--line) 70%, var(--muted));
+  border-radius: 8px;
+  color: var(--muted);
+  display: flex;
+  font-size: 13px;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 92px;
+  padding: 10px;
+  text-align: center;
+}
+
+.driver-detail-button {
+  flex: 0 0 auto;
+  min-height: 42px;
+  width: 100%;
 }
 
 .driver-active-freights strong {
@@ -2654,5 +3104,1587 @@ textarea {
 
   .sidebar-mobile-close {
     display: inline-flex;
+  }
+}
+
+/* Palette UI refresh */
+:root {
+  --bg: #EFFAFD;
+  --surface: #FFFFFF;
+  --surface-soft: #EFFAFD;
+  --surface-strong: #4A8BDF;
+  --text: #A0006D;
+  --muted: #4A8BDF;
+  --line: color-mix(in srgb, #4A8BDF 34%, #FFFFFF);
+  --primary: #4A8BDF;
+  --primary-dark: #A0006D;
+  --primary-soft: #EFFAFD;
+  --danger: #A0006D;
+  --warning: #A0006D;
+  --sun: #4A8BDF;
+  --ok: #4A8BDF;
+  --shadow: 0 24px 60px color-mix(in srgb, #4A8BDF 17%, transparent);
+}
+
+body {
+  background:
+    linear-gradient(135deg, #EFFAFD 0%, #FFFFFF 54%, #EFFAFD 100%);
+  color: #A0006D;
+}
+
+button {
+  background: #4A8BDF;
+  box-shadow: 0 10px 22px color-mix(in srgb, #4A8BDF 18%, transparent);
+  color: #FFFFFF;
+}
+
+button:hover {
+  background: #A0006D;
+  transform: translateY(-1px);
+}
+
+button.secondary,
+button.ghost-button {
+  background: #FFFFFF;
+  border: 1px solid color-mix(in srgb, #4A8BDF 42%, #FFFFFF);
+  box-shadow: none;
+  color: #4A8BDF;
+}
+
+button.secondary:hover,
+button.ghost-button:hover {
+  background: #EFFAFD;
+  border-color: #A0006D;
+  color: #A0006D;
+}
+
+button.danger {
+  background: #FFFFFF;
+  border: 1px solid #A0006D;
+  box-shadow: none;
+  color: #A0006D;
+}
+
+button.danger:hover {
+  background: #A0006D;
+  color: #FFFFFF;
+}
+
+input,
+select,
+textarea {
+  background: #FFFFFF;
+  border-color: color-mix(in srgb, #4A8BDF 38%, #FFFFFF);
+  color: #A0006D;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #A0006D;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #4A8BDF 22%, transparent);
+}
+
+.app-shell {
+  max-width: 1520px;
+}
+
+.app-sidebar {
+  background: #FFFFFF;
+  border: 1px solid color-mix(in srgb, #4A8BDF 28%, #FFFFFF);
+  box-shadow: 0 22px 50px color-mix(in srgb, #4A8BDF 15%, transparent);
+}
+
+.sidebar-brand {
+  background: #EFFAFD;
+  border: 1px solid color-mix(in srgb, #4A8BDF 32%, #FFFFFF);
+}
+
+.sidebar-brand img {
+  box-shadow: 0 12px 24px color-mix(in srgb, #4A8BDF 18%, transparent);
+}
+
+.sidebar-brand-copy p,
+.eyebrow,
+.time,
+.driver-history-row span {
+  color: #4A8BDF;
+}
+
+.sidebar-brand-copy strong,
+h1,
+h2,
+h3,
+.section-head p,
+.field,
+.simple-list small,
+.empty {
+  color: #A0006D;
+}
+
+.sidebar-nav {
+  gap: 8px;
+}
+
+.sidebar-nav button {
+  background: #FFFFFF;
+  border: 1px solid transparent;
+  box-shadow: none;
+  color: #A0006D;
+  min-height: 60px;
+}
+
+.sidebar-nav button:hover {
+  background: #EFFAFD;
+  border-color: color-mix(in srgb, #4A8BDF 38%, #FFFFFF);
+  color: #A0006D;
+}
+
+.sidebar-nav button.active {
+  background: #4A8BDF;
+  border-color: #4A8BDF;
+  box-shadow: 0 16px 30px color-mix(in srgb, #4A8BDF 24%, transparent);
+  color: #FFFFFF;
+}
+
+.sidebar-nav small {
+  color: #4A8BDF;
+  font-size: 11px;
+}
+
+.sidebar-nav button.active small {
+  color: #FFFFFF;
+}
+
+.nav-icon {
+  background: #EFFAFD;
+  border: 1px solid color-mix(in srgb, #4A8BDF 28%, #FFFFFF);
+}
+
+.sidebar-nav button.active .nav-icon {
+  background: #FFFFFF;
+  border-color: #FFFFFF;
+}
+
+.sidebar-collapse,
+.mobile-menu-button,
+.icon-button {
+  background: #FFFFFF;
+  border: 1px solid color-mix(in srgb, #4A8BDF 44%, #FFFFFF);
+  box-shadow: none;
+  color: #4A8BDF;
+}
+
+.sidebar-collapse {
+  align-self: center;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  margin-top: auto;
+  min-height: 44px;
+  padding: 0;
+  width: 44px;
+}
+
+.sidebar-collapse:hover,
+.mobile-menu-button:hover,
+.icon-button:hover {
+  background: #A0006D;
+  border-color: #A0006D;
+  color: #FFFFFF;
+}
+
+.hamburger-lines {
+  align-items: center;
+  background: transparent;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  height: auto;
+  justify-content: center;
+  width: 22px;
+}
+
+.sidebar-collapse .hamburger-lines,
+.mobile-menu-button .hamburger-lines {
+  background: transparent;
+  box-shadow: none;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  height: auto;
+  justify-content: center;
+  width: 22px;
+}
+
+.hamburger-lines i {
+  background: currentColor;
+  border-radius: 999px;
+  display: block;
+  height: 2px;
+  width: 20px;
+}
+
+.topbar,
+.section-head,
+.period-filter,
+.modal-panel,
+.freight-card,
+.vehicle-card,
+.driver-card,
+.stack-form,
+.form-grid,
+.simple-list li,
+.kanban-card,
+.kanban-column,
+.kanban-column-head {
+  background: #FFFFFF;
+  border-color: color-mix(in srgb, #4A8BDF 30%, #FFFFFF);
+  box-shadow: 0 14px 34px color-mix(in srgb, #4A8BDF 12%, transparent);
+}
+
+.topbar {
+  border-left: 5px solid #4A8BDF;
+}
+
+.workspace {
+  gap: 18px;
+}
+
+.section-head {
+  border-left: 5px solid #A0006D;
+}
+
+.freight-toolbar {
+  background: #FFFFFF;
+}
+
+.metrics div {
+  background: #FFFFFF;
+  border: 1px solid color-mix(in srgb, #4A8BDF 30%, #FFFFFF);
+  border-top: 4px solid #4A8BDF;
+}
+
+.metrics div:nth-child(2),
+.metrics div:nth-child(4) {
+  border-top-color: #A0006D;
+}
+
+.metrics strong {
+  color: #A0006D;
+}
+
+.metrics span,
+.kanban-column-head p,
+.vehicle-card-head p,
+.driver-card p,
+.driver-active-row small,
+.vehicle-usage-row small,
+.driver-history-row small,
+.driver-history-row p,
+.driver-history-empty,
+.modal-panel p {
+  color: #4A8BDF;
+}
+
+.kanban-board {
+  background: #EFFAFD;
+  border: 1px solid color-mix(in srgb, #4A8BDF 24%, #FFFFFF);
+  box-shadow: none;
+}
+
+.kanban-column {
+  background: #FFFFFF;
+}
+
+.kanban-column.drop-target {
+  border-color: #A0006D;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #A0006D 18%, transparent);
+}
+
+.badge,
+.vehicle-status,
+.driver-status,
+.freight-details span,
+.kanban-mini-details span,
+.selected-company,
+.billing-summary span,
+.vehicle-feature,
+.simple-list .registry-note {
+  background: #EFFAFD;
+  border: 1px solid color-mix(in srgb, #4A8BDF 26%, #FFFFFF);
+  color: #A0006D;
+}
+
+.badge.concluida,
+.badge.concluido,
+.vehicle-card.disponivel .vehicle-status,
+.driver-card.disponivel .driver-status {
+  background: #4A8BDF;
+  border-color: #4A8BDF;
+  color: #FFFFFF;
+}
+
+.vehicle-card.indisponivel .vehicle-status,
+.driver-card.indisponivel .driver-status {
+  background: #A0006D;
+  border-color: #A0006D;
+  color: #FFFFFF;
+}
+
+.badge.em-andamento,
+.badge.a-caminho-p1,
+.badge.retornando,
+.badge.coletado-p1,
+.badge.coletado-p2,
+.badge.coletado-p3,
+.badge.coletado-p4,
+.badge.coletado-p5,
+.vehicle-card.em-uso .vehicle-status,
+.driver-card.em-servico .driver-status {
+  background: #FFFFFF;
+  border-color: #A0006D;
+  color: #A0006D;
+}
+
+.vehicle-card,
+.driver-card {
+  border-left-color: #4A8BDF;
+}
+
+.vehicle-card.disponivel,
+.driver-card.disponivel {
+  background: #FFFFFF;
+  border-left-color: #4A8BDF;
+}
+
+.vehicle-card.em-uso,
+.driver-card.em-servico {
+  background: #FFFFFF;
+  border-left-color: #A0006D;
+}
+
+.vehicle-card.indisponivel,
+.driver-card.indisponivel {
+  background: #EFFAFD;
+  border-left-color: #A0006D;
+}
+
+.vehicle-usage,
+.driver-active-freights,
+.driver-data,
+.driver-history-row,
+.vehicle-unavailable-reason,
+.billing-field {
+  background: #EFFAFD;
+  border: 1px solid color-mix(in srgb, #4A8BDF 28%, #FFFFFF);
+}
+
+.concluded-card-footer,
+.billing-grid {
+  border-color: color-mix(in srgb, #4A8BDF 28%, #FFFFFF);
+}
+
+.cadastro-switch {
+  background: #FFFFFF;
+  border: 1px solid color-mix(in srgb, #4A8BDF 32%, #FFFFFF);
+  box-shadow: 0 14px 30px color-mix(in srgb, #4A8BDF 10%, transparent);
+}
+
+.cadastro-switch button {
+  border: 1px solid transparent;
+  color: #4A8BDF;
+}
+
+.cadastro-switch button.active {
+  background: #4A8BDF;
+  border-color: #4A8BDF;
+  color: #FFFFFF;
+}
+
+.registry-layout {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+}
+
+.registry-form-card,
+.registry-directory {
+  background: #FFFFFF;
+  border: 1px solid color-mix(in srgb, #4A8BDF 30%, #FFFFFF);
+  border-radius: 8px;
+  box-shadow: 0 16px 36px color-mix(in srgb, #4A8BDF 11%, transparent);
+  padding: 16px;
+}
+
+.registry-card-head,
+.registry-directory-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.registry-card-head span {
+  align-items: center;
+  background: #EFFAFD;
+  border: 1px solid color-mix(in srgb, #4A8BDF 34%, #FFFFFF);
+  border-radius: 8px;
+  color: #4A8BDF;
+  display: inline-flex;
+  font-weight: 900;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+
+.registry-card-head p,
+.registry-directory-head small {
+  color: #4A8BDF;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.registry-directory {
+  max-height: min(72vh, 760px);
+  overflow: hidden;
+}
+
+.registry-directory-head {
+  border-bottom: 1px solid color-mix(in srgb, #4A8BDF 24%, #FFFFFF);
+  padding-bottom: 12px;
+}
+
+.registry-directory-head strong {
+  color: #A0006D;
+  display: block;
+}
+
+.registry-list {
+  max-height: calc(min(72vh, 760px) - 82px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.registry-list li {
+  align-items: flex-start;
+  background: #EFFAFD;
+  border-color: color-mix(in srgb, #4A8BDF 26%, #FFFFFF);
+}
+
+.registry-actions {
+  align-items: center;
+}
+
+.picker-results {
+  background: #FFFFFF;
+  border-color: color-mix(in srgb, #4A8BDF 34%, #FFFFFF);
+  box-shadow: 0 18px 34px color-mix(in srgb, #4A8BDF 14%, transparent);
+}
+
+.picker-option {
+  color: #A0006D;
+}
+
+.picker-option:hover,
+.chips button:hover {
+  background: #EFFAFD;
+  color: #A0006D;
+}
+
+.chips button,
+.selected-company button {
+  background: #FFFFFF;
+  border: 1px solid color-mix(in srgb, #4A8BDF 36%, #FFFFFF);
+  color: #4A8BDF;
+}
+
+.note {
+  border-left-color: #A0006D;
+  color: #A0006D;
+}
+
+.toast.success,
+.toast.error,
+.alert {
+  background: #FFFFFF;
+  border: 1px solid #A0006D;
+  color: #A0006D;
+}
+
+.modal-backdrop,
+.sidebar-scrim,
+.kanban-context-backdrop {
+  background: color-mix(in srgb, #A0006D 28%, transparent);
+}
+
+.kanban-context-menu {
+  background: #FFFFFF;
+  border-color: color-mix(in srgb, #4A8BDF 34%, #FFFFFF);
+}
+
+@media (max-width: 1080px) {
+  .registry-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .registry-directory {
+    max-height: 520px;
+  }
+
+  .registry-list {
+    max-height: 430px;
+  }
+}
+
+@media (max-width: 860px) {
+  body {
+    background: #EFFAFD;
+  }
+
+  .app-shell,
+  .app-shell.sidebar-collapsed {
+    padding: 10px;
+  }
+
+  .topbar {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .mobile-menu-button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0;
+  }
+
+  .app-sidebar,
+  .app-sidebar.collapsed {
+    border-color: color-mix(in srgb, #4A8BDF 38%, #FFFFFF);
+    max-width: 342px;
+    width: min(90vw, 342px);
+  }
+
+  .sidebar-nav button,
+  .app-sidebar.collapsed .sidebar-nav button {
+    grid-template-columns: 44px minmax(0, 1fr);
+    min-height: 62px;
+  }
+
+  .app-sidebar.collapsed .nav-icon {
+    height: 38px;
+    width: 38px;
+  }
+
+  .app-sidebar.collapsed .nav-icon img {
+    height: 30px;
+    width: 30px;
+  }
+
+  .section-head,
+  .period-filter,
+  .topbar,
+  .cadastro-switch,
+  .registry-form-card,
+  .registry-directory,
+  .kanban-column,
+  .freight-card,
+  .vehicle-card,
+  .driver-card {
+    border-radius: 8px;
+  }
+
+  .cadastro-switch {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .registry-layout {
+    gap: 12px;
+  }
+
+  .registry-form-card,
+  .registry-directory {
+    padding: 12px;
+  }
+
+  .registry-card-head {
+    align-items: flex-start;
+  }
+
+  .registry-list li,
+  .registry-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .registry-actions button {
+    width: 100%;
+  }
+
+  .driver-cards,
+  .vehicle-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Original project palette restored */
+:root {
+  --bg: #edf3ee;
+  --surface: #ffffff;
+  --surface-soft: #f1f6f2;
+  --surface-strong: #12241d;
+  --text: #111a17;
+  --muted: #5e6d66;
+  --line: #d2ddd5;
+  --primary: #078546;
+  --primary-dark: #056437;
+  --primary-soft: #dcf4e6;
+  --danger: #d93932;
+  --warning: #f58a16;
+  --sun: #ffd61a;
+  --ok: #087d48;
+  --shadow: 0 18px 46px rgba(17, 33, 26, 0.08);
+}
+
+body {
+  background:
+    linear-gradient(135deg, #f8fbf7 0%, var(--bg) 58%, #fff8e5 100%);
+  color: var(--text);
+}
+
+button {
+  background: var(--primary);
+  box-shadow: 0 10px 22px rgba(7, 133, 70, 0.16);
+  color: #fff;
+}
+
+button:hover {
+  background: var(--primary-dark);
+}
+
+button.secondary,
+button.ghost-button,
+.sidebar-collapse,
+.mobile-menu-button,
+.icon-button {
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: none;
+  color: var(--text);
+}
+
+button.secondary:hover,
+button.ghost-button:hover,
+.sidebar-collapse:hover,
+.mobile-menu-button:hover,
+.icon-button:hover {
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--line));
+  color: var(--primary-dark);
+}
+
+button.danger {
+  background: #f4e7e7;
+  border-color: #ead0d0;
+  color: var(--danger);
+}
+
+button.danger:hover {
+  background: #ead0d0;
+  color: var(--danger);
+}
+
+input,
+select,
+textarea {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: color-mix(in srgb, var(--primary) 64%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.app-sidebar,
+.topbar,
+.section-head,
+.period-filter,
+.modal-panel,
+.freight-card,
+.vehicle-card,
+.driver-card,
+.stack-form,
+.form-grid,
+.simple-list li,
+.kanban-card,
+.kanban-column,
+.kanban-column-head,
+.registry-form-card,
+.registry-directory,
+.cadastro-switch {
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+
+.sidebar-brand,
+.nav-icon,
+.kanban-board,
+.vehicle-usage,
+.driver-active-freights,
+.driver-data,
+.driver-history-row,
+.vehicle-unavailable-reason,
+.billing-field,
+.registry-card-head span,
+.registry-list li,
+.badge,
+.vehicle-status,
+.driver-status,
+.freight-details span,
+.kanban-mini-details span,
+.selected-company,
+.billing-summary span,
+.vehicle-feature,
+.simple-list .registry-note {
+  background: var(--surface-soft);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.sidebar-brand-copy p,
+.eyebrow,
+.time,
+.driver-history-row span,
+.registry-card-head span {
+  color: var(--primary);
+}
+
+.sidebar-nav small,
+.section-head p,
+.registry-card-head p,
+.registry-directory-head small,
+.picker-option small,
+.metrics span,
+.kanban-column-head p,
+.vehicle-card-head p,
+.driver-card p,
+.driver-active-row small,
+.vehicle-usage-row small,
+.driver-history-row small,
+.driver-history-row p,
+.driver-history-empty,
+.modal-panel p {
+  color: var(--muted);
+}
+
+.topbar .eyebrow {
+  color: var(--muted);
+}
+
+.sidebar-brand-copy strong,
+h1,
+h2,
+h3,
+.field,
+.empty,
+.registry-directory-head strong,
+.metrics strong,
+.picker-option {
+  color: var(--text);
+}
+
+.topbar,
+.section-head,
+.note {
+  border-left-color: var(--primary);
+}
+
+.sidebar-nav button {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text);
+}
+
+.sidebar-nav button:hover {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.sidebar-nav button.active {
+  background: var(--surface-strong);
+  border-color: var(--surface-strong);
+  box-shadow: 0 14px 28px rgba(17, 31, 25, 0.18);
+  color: #fff;
+}
+
+.sidebar-nav button.active small {
+  color: color-mix(in srgb, #fff 72%, var(--sun));
+}
+
+.sidebar-nav button.active .nav-icon {
+  background: #fff;
+  border-color: #fff;
+}
+
+.metrics div {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98), color-mix(in srgb, var(--surface-soft) 86%, #fff));
+  border-color: var(--line);
+  border-top-color: var(--primary);
+}
+
+.metrics div:nth-child(2) {
+  border-top-color: var(--warning);
+}
+
+.metrics div:nth-child(3) {
+  border-top-color: var(--primary);
+}
+
+.metrics div:nth-child(4) {
+  border-top-color: var(--sun);
+}
+
+.kanban-board {
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.kanban-column {
+  background: color-mix(in srgb, var(--surface-soft) 82%, #fff);
+  border-color: color-mix(in srgb, var(--line) 88%, var(--column-accent));
+}
+
+.kanban-column.drop-target {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.badge.a-caminho-p1,
+.badge.retornando,
+.badge.em-andamento,
+.vehicle-card.em-uso .vehicle-status,
+.driver-card.em-servico .driver-status {
+  background: #fff4d8;
+  border-color: color-mix(in srgb, var(--warning) 34%, var(--line));
+  color: var(--warning);
+}
+
+.badge.concluida,
+.badge.concluido,
+.vehicle-card.disponivel .vehicle-status,
+.driver-card.disponivel .driver-status {
+  background: #def3e7;
+  border-color: color-mix(in srgb, var(--ok) 30%, var(--line));
+  color: var(--ok);
+}
+
+.badge.coletado-p1,
+.badge.coletado-p2,
+.badge.coletado-p3,
+.badge.coletado-p4,
+.badge.coletado-p5 {
+  background: #e6f4ff;
+  border-color: #cbe9fb;
+  color: #176087;
+}
+
+.vehicle-card.indisponivel .vehicle-status,
+.driver-card.indisponivel .driver-status {
+  background: #f5dddd;
+  border-color: #ead0d0;
+  color: var(--danger);
+}
+
+.vehicle-card,
+.driver-card,
+.vehicle-card.disponivel,
+.driver-card.disponivel {
+  background: #fff;
+  border-left-color: var(--ok);
+}
+
+.vehicle-card.em-uso,
+.driver-card.em-servico {
+  background: #fffaf0;
+  border-left-color: var(--warning);
+}
+
+.vehicle-card.indisponivel,
+.driver-card.indisponivel {
+  background: #fff5f5;
+  border-left-color: var(--danger);
+}
+
+.kanban-column-head {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--column-accent) 16%, #fff) 0%, #fff 58%, #f8faf8 100%);
+  border-top: 5px solid var(--column-accent);
+}
+
+.kanban-column {
+  border-top: 4px solid var(--column-accent);
+}
+
+.cadastro-switch {
+  background: var(--surface-soft);
+}
+
+.cadastro-switch button {
+  color: var(--muted);
+}
+
+.cadastro-switch button.active {
+  background: var(--surface);
+  border-color: var(--surface);
+  color: var(--text);
+}
+
+.registry-list li {
+  background: var(--surface-soft);
+}
+
+.registry-form-card,
+.registry-directory {
+  color: var(--text);
+}
+
+.registry-form-card h2,
+.registry-directory-head strong,
+.registry-list > li > span {
+  color: var(--text);
+}
+
+.registry-card-head p,
+.registry-directory-head small,
+.registry-list small {
+  color: var(--muted);
+}
+
+.registry-list .registry-note {
+  background: var(--surface);
+  border-left-color: var(--primary);
+  color: var(--muted);
+}
+
+.picker-results,
+.kanban-context-menu {
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+
+.chips button,
+.selected-company button {
+  background: var(--surface-soft);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.chips button:hover,
+.picker-option:hover {
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+}
+
+.toast.success {
+  background: #def3e7;
+  border-color: color-mix(in srgb, var(--ok) 30%, var(--line));
+  color: var(--ok);
+}
+
+.toast.error {
+  background: #f5dddd;
+  border-color: #ead0d0;
+  color: var(--danger);
+}
+
+.alert {
+  background: #fff4d8;
+  border-color: color-mix(in srgb, var(--warning) 32%, var(--line));
+  color: #7b4a00;
+}
+
+.modal-backdrop,
+.sidebar-scrim,
+.kanban-context-backdrop {
+  background: rgba(16, 24, 21, 0.42);
+}
+
+@media (max-width: 860px) {
+  body {
+    background: var(--surface);
+  }
+
+  .app-sidebar,
+  .app-sidebar.collapsed {
+    border-color: var(--line);
+  }
+}
+
+.freight-quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.overdue-filter-button {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.overdue-filter-button span {
+  align-items: center;
+  background: #fff4d8;
+  border: 1px solid color-mix(in srgb, var(--warning) 34%, var(--line));
+  border-radius: 999px;
+  color: #7b4a00;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  justify-content: center;
+  min-width: 26px;
+  padding: 2px 7px;
+}
+
+.overdue-filter-button.active {
+  background: #fff4d8;
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--line));
+  color: #7b4a00;
+}
+
+.overdue-alert,
+.overdue-panel {
+  background: #fffaf0;
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, var(--line));
+  border-left: 5px solid var(--warning);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  color: var(--text);
+}
+
+.overdue-alert {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 14px 16px;
+  position: sticky;
+  top: 8px;
+  z-index: 12;
+}
+
+.overdue-alert-main {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.overdue-alert-count {
+  align-items: center;
+  background: var(--warning);
+  border-radius: 8px;
+  color: #fff;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 22px;
+  font-weight: 900;
+  height: 44px;
+  justify-content: center;
+  min-width: 44px;
+  padding: 0 12px;
+}
+
+.overdue-alert strong,
+.overdue-panel h3,
+.overdue-row-main strong {
+  color: var(--text);
+}
+
+.overdue-alert p,
+.overdue-panel p,
+.overdue-row-main small {
+  color: var(--muted);
+}
+
+.overdue-alert-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.overdue-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.overdue-panel-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.overdue-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.overdue-row {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 10px;
+}
+
+.overdue-row-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.overdue-row-main span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overdue-days,
+.kanban-mini-details .overdue-chip {
+  background: #fff4d8;
+  border: 1px solid color-mix(in srgb, var(--warning) 36%, var(--line));
+  border-radius: 999px;
+  color: #7b4a00;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
+.kanban-mini-details .checklist-chip,
+.freight-details .checklist-chip {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.kanban-mini-details .checklist-chip.confirmed,
+.freight-details .checklist-chip.confirmed {
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--ok) 30%, var(--line));
+  color: var(--ok);
+}
+
+.kanban-mini-details .checklist-chip.pending,
+.freight-details .checklist-chip.pending {
+  background: #fff4d8;
+  border-color: color-mix(in srgb, var(--warning) 36%, var(--line));
+  color: #7b4a00;
+}
+
+.kanban-mini-details .checklist-chip.issue,
+.freight-details .checklist-chip.issue {
+  background: #f5dddd;
+  border-color: #ead0d0;
+  color: var(--danger);
+}
+
+.overdue-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.overdue-row-actions button {
+  min-height: 34px;
+  padding: 0 9px;
+}
+
+.kanban-card.overdue {
+  border-color: color-mix(in srgb, var(--warning) 46%, var(--line));
+  box-shadow: 0 10px 24px rgba(122, 77, 0, 0.12);
+}
+
+.kanban-card.overdue:hover {
+  box-shadow: 0 14px 28px rgba(122, 77, 0, 0.16);
+}
+
+@media (max-width: 860px) {
+  .freight-detail-backdrop {
+    align-items: stretch;
+    display: grid;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .freight-detail-modal {
+    border-radius: 0;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    width: 100%;
+  }
+
+  .freight-detail-header {
+    padding: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .freight-detail-header h2 {
+    font-size: 19px;
+  }
+
+  .freight-detail-body {
+    grid-template-columns: 1fr;
+  }
+
+  .freight-detail-overview {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .freight-detail-main,
+  .freight-detail-side {
+    padding: 14px;
+  }
+
+  .freight-detail-side {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .freight-quick-filters {
+    justify-content: stretch;
+  }
+
+  .freight-quick-filters button,
+  .overdue-alert-actions button,
+  .overdue-panel-head button,
+  .overdue-row-actions button {
+    width: 100%;
+  }
+
+  .overdue-alert {
+    align-items: stretch;
+    flex-direction: column;
+    position: static;
+  }
+
+  .overdue-alert-main {
+    align-items: flex-start;
+  }
+
+  .overdue-panel-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .overdue-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .overdue-row {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .overdue-row-main span {
+    white-space: normal;
+  }
+
+  .overdue-days {
+    justify-self: start;
+  }
+
+  .overdue-row-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+.freight-create-form {
+  align-items: start;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), color-mix(in srgb, var(--surface-soft) 46%, #fff));
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--line));
+  box-shadow: 0 18px 42px rgba(17, 33, 26, 0.07);
+  display: grid;
+  gap: 14px;
+  grid-auto-flow: row dense;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  overflow: visible;
+  padding: 18px;
+}
+
+.freight-create-form > .field,
+.freight-create-form > .check-field {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(17, 33, 26, 0.04);
+  grid-column: span 4;
+  min-height: 94px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.freight-create-form > :nth-child(1) {
+  grid-column: span 4;
+}
+
+.freight-create-form > :nth-child(2),
+.freight-create-form > :nth-child(3) {
+  grid-column: span 3;
+}
+
+.freight-create-form > :nth-child(4) {
+  grid-column: span 2;
+}
+
+.freight-create-form > :nth-child(5),
+.freight-create-form > :nth-child(7) {
+  grid-column: span 6;
+  min-height: 150px;
+}
+
+.freight-create-form > :nth-child(6) {
+  grid-column: span 12;
+  min-height: 132px;
+}
+
+.freight-create-form > :nth-child(8),
+.freight-create-form > :nth-child(9),
+.freight-create-form > :nth-child(11),
+.freight-create-form > :nth-child(12) {
+  grid-column: span 3;
+}
+
+.freight-create-form > :nth-child(10) {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  grid-column: span 4;
+  min-height: 72px;
+  order: 2;
+}
+
+.freight-create-form > :nth-child(13) {
+  grid-column: span 8;
+  min-height: 110px;
+  order: 2;
+}
+
+.freight-create-form > :nth-child(14) {
+  grid-column: span 12;
+  order: 3;
+}
+
+.freight-create-form .field,
+.freight-create-form .company-picker > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.freight-create-form input,
+.freight-create-form select,
+.freight-create-form textarea {
+  background: color-mix(in srgb, var(--surface-soft) 46%, #fff);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-sizing: border-box;
+  color: var(--text);
+  max-width: 100%;
+  min-height: 44px;
+  min-width: 0;
+  text-transform: none;
+  width: 100%;
+}
+
+.freight-create-form textarea {
+  min-height: 78px;
+}
+
+.freight-create-form .company-picker {
+  gap: 8px;
+  z-index: 1;
+}
+
+.freight-create-form .check-field input {
+  height: 18px;
+  min-height: 0;
+  width: 18px;
+}
+
+.freight-create-form .company-picker:focus-within {
+  z-index: 20;
+}
+
+.freight-create-form .picker-results {
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--line));
+  box-shadow: 0 18px 42px rgba(17, 33, 26, 0.16);
+  left: 12px;
+  max-height: 260px;
+  position: absolute;
+  right: 12px;
+  top: 76px;
+  z-index: 30;
+}
+
+.freight-create-form .picker-results,
+.freight-create-form .selected-company,
+.freight-create-form .chips {
+  text-transform: none;
+}
+
+.freight-create-form .picker-option {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  min-height: 46px;
+  padding: 8px 10px;
+}
+
+.freight-create-form .picker-option:hover {
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--line));
+  color: var(--primary-dark);
+}
+
+.freight-create-form .selected-company {
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--line));
+  min-height: 42px;
+}
+
+.freight-create-form .selected-company span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.freight-create-form .chips {
+  min-height: 36px;
+}
+
+.freight-create-form .chips button {
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--line));
+  color: var(--primary-dark);
+  max-width: 100%;
+}
+
+.freight-create-form .freight-form-actions {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  display: flex;
+  justify-content: flex-end;
+  min-height: auto;
+  padding: 0;
+}
+
+.freight-create-form .freight-form-actions button {
+  flex: 0 1 220px;
+}
+
+@media (max-width: 1080px) {
+  .freight-create-form > .field,
+  .freight-create-form > .check-field,
+  .freight-create-form > :nth-child(1),
+  .freight-create-form > :nth-child(2),
+  .freight-create-form > :nth-child(3),
+  .freight-create-form > :nth-child(4),
+  .freight-create-form > :nth-child(5),
+  .freight-create-form > :nth-child(7),
+  .freight-create-form > :nth-child(8),
+  .freight-create-form > :nth-child(9),
+  .freight-create-form > :nth-child(10),
+  .freight-create-form > :nth-child(11),
+  .freight-create-form > :nth-child(12),
+  .freight-create-form > :nth-child(13) {
+    grid-column: span 6;
+  }
+
+  .freight-create-form > :nth-child(6),
+  .freight-create-form > :nth-child(14) {
+    grid-column: span 12;
+  }
+}
+
+@media (max-width: 700px) {
+  .freight-create-form {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .freight-create-form > .field,
+  .freight-create-form > .check-field,
+  .freight-create-form > :nth-child(1),
+  .freight-create-form > :nth-child(2),
+  .freight-create-form > :nth-child(3),
+  .freight-create-form > :nth-child(4),
+  .freight-create-form > :nth-child(5),
+  .freight-create-form > :nth-child(6),
+  .freight-create-form > :nth-child(7),
+  .freight-create-form > :nth-child(8),
+  .freight-create-form > :nth-child(9),
+  .freight-create-form > :nth-child(10),
+  .freight-create-form > :nth-child(11),
+  .freight-create-form > :nth-child(12),
+  .freight-create-form > :nth-child(13),
+  .freight-create-form > :nth-child(14) {
+    grid-column: span 12;
+    min-height: auto;
+  }
+
+  .freight-create-form .picker-results {
+    left: 10px;
+    right: 10px;
+    top: 74px;
+  }
+
+  .freight-create-form .freight-form-actions {
+    display: grid;
+  }
+
+  .freight-create-form .freight-form-actions button {
+    width: 100%;
   }
 }

@@ -1,6 +1,7 @@
 import io
+import secrets
 import zipfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 from xml.sax.saxutils import escape
 
@@ -8,6 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from sqlalchemy import func, inspect, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import models
@@ -25,7 +27,6 @@ STATUS_FRETE = [
     "Chegada no destino",
     "retornando",
     "concluido",
-    "Cancelada",
 ]
 
 
@@ -51,12 +52,31 @@ def preparar_banco():
             "valor_retorno": "ALTER TABLE fretes ADD COLUMN valor_retorno FLOAT",
             "valor_ponto_adicional": "ALTER TABLE fretes ADD COLUMN valor_ponto_adicional FLOAT",
             "observacoes": "ALTER TABLE fretes ADD COLUMN observacoes TEXT",
+            "checklist_token": "ALTER TABLE fretes ADD COLUMN checklist_token VARCHAR",
+            "checklist_tacografo": "ALTER TABLE fretes ADD COLUMN checklist_tacografo BOOLEAN DEFAULT 0",
+            "checklist_pneus": "ALTER TABLE fretes ADD COLUMN checklist_pneus BOOLEAN DEFAULT 0",
+            "checklist_oleo": "ALTER TABLE fretes ADD COLUMN checklist_oleo BOOLEAN DEFAULT 0",
+            "checklist_avarias_externas": "ALTER TABLE fretes ADD COLUMN checklist_avarias_externas BOOLEAN DEFAULT 0",
+            "checklist_avarias_internas": "ALTER TABLE fretes ADD COLUMN checklist_avarias_internas BOOLEAN DEFAULT 0",
+            "checklist_confirmado": "ALTER TABLE fretes ADD COLUMN checklist_confirmado BOOLEAN DEFAULT 0",
+            "checklist_confirmado_em": "ALTER TABLE fretes ADD COLUMN checklist_confirmado_em DATETIME",
+            "checklist_observacoes": "ALTER TABLE fretes ADD COLUMN checklist_observacoes TEXT",
         }
 
         with engine.begin() as conexao:
             for coluna, comando in ajustes.items():
                 if coluna not in colunas:
                     conexao.execute(text(comando))
+            fretes_sem_token = conexao.execute(text("""
+                SELECT id
+                FROM fretes
+                WHERE checklist_token IS NULL OR checklist_token = ''
+            """)).fetchall()
+            for (frete_id,) in fretes_sem_token:
+                conexao.execute(
+                    text("UPDATE fretes SET checklist_token = :token WHERE id = :id"),
+                    {"token": secrets.token_urlsafe(16), "id": frete_id},
+                )
             conexao.execute(text("""
                 UPDATE fretes
                 SET valor_retorno = COALESCE(
@@ -95,6 +115,41 @@ def preparar_banco():
             for coluna, comando in ajustes.items():
                 if coluna not in colunas:
                     conexao.execute(text(comando))
+
+        inspector = inspect(engine)
+        indices_unicos_placa = [
+            indice
+            for indice in inspector.get_indexes("veiculos")
+            if indice.get("unique") and indice.get("column_names") == ["placa"]
+        ]
+        constraints_unicas_placa = [
+            constraint
+            for constraint in inspector.get_unique_constraints("veiculos")
+            if constraint.get("column_names") == ["placa"]
+        ]
+        if indices_unicos_placa or constraints_unicas_placa:
+            with engine.begin() as conexao:
+                conexao.execute(text("PRAGMA foreign_keys=OFF"))
+                conexao.execute(text("ALTER TABLE veiculos RENAME TO veiculos_antigos"))
+                conexao.execute(text("""
+                    CREATE TABLE veiculos (
+                        id INTEGER NOT NULL,
+                        placa VARCHAR NOT NULL,
+                        tipo VARCHAR NOT NULL,
+                        observacoes TEXT,
+                        motivo_indisponibilidade TEXT,
+                        ativo BOOLEAN,
+                        PRIMARY KEY (id),
+                        CONSTRAINT uq_veiculos_placa_tipo UNIQUE (placa, tipo)
+                    )
+                """))
+                conexao.execute(text("""
+                    INSERT INTO veiculos (id, placa, tipo, observacoes, motivo_indisponibilidade, ativo)
+                    SELECT id, placa, tipo, observacoes, motivo_indisponibilidade, COALESCE(ativo, 1)
+                    FROM veiculos_antigos
+                """))
+                conexao.execute(text("DROP TABLE veiculos_antigos"))
+                conexao.execute(text("PRAGMA foreign_keys=ON"))
 
     if "empresas" in tabelas:
         colunas = {coluna["name"] for coluna in inspector.get_columns("empresas")}
@@ -143,6 +198,28 @@ def montar_rota(frete: schemas.FreteCreate | schemas.FreteUpdate) -> str:
     empresas = frete.empresas_coleta or ""
     pontos = [ponto.strip() for ponto in [origem, empresas, destino] if ponto and ponto.strip()]
     return " -> ".join(pontos)
+
+
+def resposta_checklist_frete(frete: models.Frete) -> dict:
+    return {
+        "token": frete.checklist_token,
+        "frete_id": frete.id,
+        "caminhao": frete.veiculo.tipo if frete.veiculo else frete.tipo_caminhao_necessario,
+        "placa": frete.veiculo.placa if frete.veiculo else "Sem caminhao",
+        "motorista": frete.motorista.nome if frete.motorista else "Sem motorista",
+        "origem": frete.origem,
+        "destino": frete.destino,
+        "data_coleta": frete.data_coleta,
+        "horario_coleta": frete.horario_coleta,
+        "tacografo": bool(frete.checklist_tacografo),
+        "pneus": bool(frete.checklist_pneus),
+        "oleo": bool(frete.checklist_oleo),
+        "avarias_externas": bool(frete.checklist_avarias_externas),
+        "avarias_internas": bool(frete.checklist_avarias_internas),
+        "confirmado": bool(frete.checklist_confirmado),
+        "confirmado_em": frete.checklist_confirmado_em,
+        "observacoes": frete.checklist_observacoes,
+    }
 
 
 def pontos_adicionais_frete(frete: models.Frete) -> list[str]:
@@ -407,7 +484,11 @@ def excluir_motorista(motorista_id: int, db: Session = Depends(get_db)):
 def criar_veiculo(veiculo: schemas.VeiculoCreate, db: Session = Depends(get_db)):
     db_veiculo = models.Veiculo(**veiculo.model_dump())
     db.add(db_veiculo)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Ja existe caminhao com esta identificacao e tipo")
     db.refresh(db_veiculo)
     return db_veiculo
 
@@ -422,7 +503,11 @@ def atualizar_veiculo(veiculo_id: int, dados: schemas.VeiculoUpdate, db: Session
     db_veiculo = obter_ou_404(db, models.Veiculo, veiculo_id, "Veiculo nao encontrado")
     for campo, valor in dados.model_dump(exclude_unset=True).items():
         setattr(db_veiculo, campo, valor)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Ja existe caminhao com esta identificacao e tipo")
     db.refresh(db_veiculo)
     return db_veiculo
 
@@ -478,6 +563,7 @@ def criar_frete(frete: schemas.FreteCreate, db: Session = Depends(get_db)):
     dados["tipo_frete"] = dados.get("tipo_frete") or "principal"
     dados["rota"] = montar_rota(frete)
     dados["pontoAdicional"] = frete.retorno and dados["tipo_frete"] == "principal"
+    dados["checklist_token"] = secrets.token_urlsafe(16)
     db_frete = models.Frete(**dados)
     db.add(db_frete)
     db.commit()
@@ -488,6 +574,33 @@ def criar_frete(frete: schemas.FreteCreate, db: Session = Depends(get_db)):
 @app.get("/fretes/", response_model=list[schemas.FreteResponse], tags=["Fretes"])
 def listar_fretes(db: Session = Depends(get_db)):
     return db.query(models.Frete).order_by(models.Frete.data_coleta, models.Frete.horario_coleta).all()
+
+
+@app.get("/checklists/{token}", response_model=schemas.ChecklistFreteResponse, tags=["Checklist"])
+def obter_checklist_frete(token: str, db: Session = Depends(get_db)):
+    frete = db.query(models.Frete).filter(models.Frete.checklist_token == token).first()
+    if not frete:
+        raise HTTPException(status_code=404, detail="Checklist nao encontrado")
+    return resposta_checklist_frete(frete)
+
+
+@app.put("/checklists/{token}", response_model=schemas.ChecklistFreteResponse, tags=["Checklist"])
+def confirmar_checklist_frete(token: str, checklist: schemas.ChecklistFreteUpdate, db: Session = Depends(get_db)):
+    frete = db.query(models.Frete).filter(models.Frete.checklist_token == token).first()
+    if not frete:
+        raise HTTPException(status_code=404, detail="Checklist nao encontrado")
+
+    frete.checklist_tacografo = checklist.tacografo
+    frete.checklist_pneus = checklist.pneus
+    frete.checklist_oleo = checklist.oleo
+    frete.checklist_avarias_externas = checklist.avarias_externas
+    frete.checklist_avarias_internas = checklist.avarias_internas
+    frete.checklist_confirmado = True
+    frete.checklist_confirmado_em = datetime.now()
+    frete.checklist_observacoes = checklist.observacoes
+    db.commit()
+    db.refresh(frete)
+    return resposta_checklist_frete(frete)
 
 
 @app.get("/fretes/concluidos/exportar", tags=["Fretes"])

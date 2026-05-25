@@ -1,7 +1,7 @@
 import re
 
 from pydantic import BaseModel, field_validator
-from datetime import date, time
+from datetime import date, datetime, time
 from typing import Optional
 
 class MotoristaBase(BaseModel):
@@ -175,6 +175,15 @@ class FreteCreate(FreteBase):
 
 class FreteResponse(FreteBase):
     id: int
+    checklist_token: Optional[str] = None
+    checklist_tacografo: bool = False
+    checklist_pneus: bool = False
+    checklist_oleo: bool = False
+    checklist_avarias_externas: bool = False
+    checklist_avarias_internas: bool = False
+    checklist_confirmado: bool = False
+    checklist_confirmado_em: Optional[datetime] = None
+    checklist_observacoes: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -212,6 +221,33 @@ class FreteDocumentosUpdate(BaseModel):
 
 class FreteNotaFiscalUpdate(BaseModel):
     nota_fiscal: Optional[str] = None
+
+class ChecklistFreteResponse(BaseModel):
+    token: str
+    frete_id: int
+    caminhao: str
+    placa: str
+    motorista: str
+    origem: str
+    destino: str
+    data_coleta: date
+    horario_coleta: time
+    tacografo: bool = False
+    pneus: bool = False
+    oleo: bool = False
+    avarias_externas: bool = False
+    avarias_internas: bool = False
+    confirmado: bool = False
+    confirmado_em: Optional[datetime] = None
+    observacoes: Optional[str] = None
+
+class ChecklistFreteUpdate(BaseModel):
+    tacografo: bool = False
+    pneus: bool = False
+    oleo: bool = False
+    avarias_externas: bool = False
+    avarias_internas: bool = False
+    observacoes: Optional[str] = None
 
 class MotoristaComContagem(MotoristaResponse):
     viagens_dia: int
