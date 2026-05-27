@@ -89,6 +89,7 @@ class VeiculoBase(BaseModel):
     placa: str
     tipo: str
     observacoes: Optional[str] = None
+    observacao_estado: Optional[str] = None
     motivo_indisponibilidade: Optional[str] = None
 
 class VeiculoCreate(VeiculoBase):
@@ -106,6 +107,7 @@ class VeiculoUpdate(BaseModel):
     tipo: Optional[str] = None
     ativo: Optional[bool] = None
     observacoes: Optional[str] = None
+    observacao_estado: Optional[str] = None
     motivo_indisponibilidade: Optional[str] = None
 
 class EmpresaBase(BaseModel):
@@ -141,6 +143,84 @@ class EmpresaUpdate(BaseModel):
     ativo: Optional[bool] = None
 
 class EmpresaResponse(EmpresaBase):
+    id: int
+    ativo: bool
+
+    class Config:
+        from_attributes = True
+
+class FornecedorBase(BaseModel):
+    nome: str
+    telefone: Optional[str] = None
+    cep: Optional[str] = None
+    logradouro: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    uf: Optional[str] = None
+    endereco: Optional[str] = None
+    marca: str
+    observacoes: Optional[str] = None
+
+class FornecedorCreate(FornecedorBase):
+    pass
+
+class FornecedorUpdate(BaseModel):
+    nome: Optional[str] = None
+    telefone: Optional[str] = None
+    cep: Optional[str] = None
+    logradouro: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    bairro: Optional[str] = None
+    endereco: Optional[str] = None
+    cidade: Optional[str] = None
+    uf: Optional[str] = None
+    marca: Optional[str] = None
+    observacoes: Optional[str] = None
+    ativo: Optional[bool] = None
+
+class FornecedorResponse(FornecedorBase):
+    id: int
+    ativo: bool
+
+    class Config:
+        from_attributes = True
+
+class PrestadorServicoBase(BaseModel):
+    nome: str
+    telefone: Optional[str] = None
+    cep: Optional[str] = None
+    logradouro: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    uf: Optional[str] = None
+    endereco: Optional[str] = None
+    tipo: str
+    observacoes: Optional[str] = None
+
+class PrestadorServicoCreate(PrestadorServicoBase):
+    pass
+
+class PrestadorServicoUpdate(BaseModel):
+    nome: Optional[str] = None
+    telefone: Optional[str] = None
+    cep: Optional[str] = None
+    logradouro: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    uf: Optional[str] = None
+    endereco: Optional[str] = None
+    tipo: Optional[str] = None
+    observacoes: Optional[str] = None
+    ativo: Optional[bool] = None
+
+class PrestadorServicoResponse(PrestadorServicoBase):
     id: int
     ativo: bool
 

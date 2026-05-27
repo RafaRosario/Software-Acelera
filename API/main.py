@@ -107,6 +107,7 @@ def preparar_banco():
         colunas = {coluna["name"] for coluna in inspector.get_columns("veiculos")}
         ajustes = {
             "observacoes": "ALTER TABLE veiculos ADD COLUMN observacoes TEXT",
+            "observacao_estado": "ALTER TABLE veiculos ADD COLUMN observacao_estado TEXT",
             "motivo_indisponibilidade": "ALTER TABLE veiculos ADD COLUMN motivo_indisponibilidade TEXT",
             "ativo": "ALTER TABLE veiculos ADD COLUMN ativo BOOLEAN DEFAULT 1",
         }
@@ -137,6 +138,7 @@ def preparar_banco():
                         placa VARCHAR NOT NULL,
                         tipo VARCHAR NOT NULL,
                         observacoes TEXT,
+                        observacao_estado TEXT,
                         motivo_indisponibilidade TEXT,
                         ativo BOOLEAN,
                         PRIMARY KEY (id),
@@ -144,8 +146,8 @@ def preparar_banco():
                     )
                 """))
                 conexao.execute(text("""
-                    INSERT INTO veiculos (id, placa, tipo, observacoes, motivo_indisponibilidade, ativo)
-                    SELECT id, placa, tipo, observacoes, motivo_indisponibilidade, COALESCE(ativo, 1)
+                    INSERT INTO veiculos (id, placa, tipo, observacoes, observacao_estado, motivo_indisponibilidade, ativo)
+                    SELECT id, placa, tipo, observacoes, observacao_estado, motivo_indisponibilidade, COALESCE(ativo, 1)
                     FROM veiculos_antigos
                 """))
                 conexao.execute(text("DROP TABLE veiculos_antigos"))
@@ -169,6 +171,72 @@ def preparar_banco():
             for coluna, comando in ajustes.items():
                 if coluna not in colunas:
                     conexao.execute(text(comando))
+
+    if "fornecedores" in tabelas:
+        colunas = {coluna["name"] for coluna in inspector.get_columns("fornecedores")}
+        ajustes = {
+            "nome": "ALTER TABLE fornecedores ADD COLUMN nome VARCHAR DEFAULT '' NOT NULL",
+            "telefone": "ALTER TABLE fornecedores ADD COLUMN telefone VARCHAR",
+            "cep": "ALTER TABLE fornecedores ADD COLUMN cep VARCHAR",
+            "logradouro": "ALTER TABLE fornecedores ADD COLUMN logradouro VARCHAR",
+            "numero": "ALTER TABLE fornecedores ADD COLUMN numero VARCHAR",
+            "complemento": "ALTER TABLE fornecedores ADD COLUMN complemento VARCHAR",
+            "bairro": "ALTER TABLE fornecedores ADD COLUMN bairro VARCHAR",
+            "endereco": "ALTER TABLE fornecedores ADD COLUMN endereco TEXT DEFAULT '' NOT NULL",
+            "cidade": "ALTER TABLE fornecedores ADD COLUMN cidade VARCHAR DEFAULT '' NOT NULL",
+            "uf": "ALTER TABLE fornecedores ADD COLUMN uf VARCHAR",
+            "marca": "ALTER TABLE fornecedores ADD COLUMN marca VARCHAR DEFAULT '' NOT NULL",
+            "observacoes": "ALTER TABLE fornecedores ADD COLUMN observacoes TEXT",
+            "ativo": "ALTER TABLE fornecedores ADD COLUMN ativo BOOLEAN DEFAULT 1",
+        }
+
+        with engine.begin() as conexao:
+            for coluna, comando in ajustes.items():
+                if coluna not in colunas:
+                    conexao.execute(text(comando))
+            conexao.execute(text("""
+                UPDATE fornecedores
+                SET logradouro = COALESCE(NULLIF(logradouro, ''), NULLIF(endereco, '')),
+                    endereco = COALESCE(NULLIF(endereco, ''), NULLIF(logradouro, ''), '')
+            """))
+
+    if "prestadores_servicos" in tabelas:
+        colunas = {coluna["name"] for coluna in inspector.get_columns("prestadores_servicos")}
+        ajustes = {
+            "nome": "ALTER TABLE prestadores_servicos ADD COLUMN nome VARCHAR DEFAULT '' NOT NULL",
+            "telefone": "ALTER TABLE prestadores_servicos ADD COLUMN telefone VARCHAR",
+            "cep": "ALTER TABLE prestadores_servicos ADD COLUMN cep VARCHAR",
+            "logradouro": "ALTER TABLE prestadores_servicos ADD COLUMN logradouro VARCHAR",
+            "rua": "ALTER TABLE prestadores_servicos ADD COLUMN rua VARCHAR DEFAULT '' NOT NULL",
+            "numero": "ALTER TABLE prestadores_servicos ADD COLUMN numero VARCHAR",
+            "complemento": "ALTER TABLE prestadores_servicos ADD COLUMN complemento VARCHAR",
+            "bairro": "ALTER TABLE prestadores_servicos ADD COLUMN bairro VARCHAR",
+            "cidade": "ALTER TABLE prestadores_servicos ADD COLUMN cidade VARCHAR DEFAULT '' NOT NULL",
+            "uf": "ALTER TABLE prestadores_servicos ADD COLUMN uf VARCHAR",
+            "endereco": "ALTER TABLE prestadores_servicos ADD COLUMN endereco TEXT DEFAULT '' NOT NULL",
+            "tipo": "ALTER TABLE prestadores_servicos ADD COLUMN tipo VARCHAR DEFAULT '' NOT NULL",
+            "observacoes": "ALTER TABLE prestadores_servicos ADD COLUMN observacoes TEXT",
+            "ativo": "ALTER TABLE prestadores_servicos ADD COLUMN ativo BOOLEAN DEFAULT 1",
+        }
+
+        with engine.begin() as conexao:
+            for coluna, comando in ajustes.items():
+                if coluna not in colunas:
+                    conexao.execute(text(comando))
+            conexao.execute(text("""
+                UPDATE prestadores_servicos
+                SET logradouro = COALESCE(NULLIF(logradouro, ''), NULLIF(rua, '')),
+                    rua = COALESCE(NULLIF(rua, ''), NULLIF(logradouro, ''), ''),
+                    endereco = COALESCE(
+                        NULLIF(endereco, ''),
+                        TRIM(
+                            COALESCE(NULLIF(logradouro, ''), '') ||
+                            CASE WHEN COALESCE(NULLIF(numero, ''), '') <> '' THEN ', ' || numero ELSE '' END ||
+                            CASE WHEN COALESCE(NULLIF(cidade, ''), '') <> '' THEN ', ' || cidade ELSE '' END
+                        ),
+                        ''
+                    )
+            """))
 
 
 preparar_banco()
@@ -238,6 +306,12 @@ def montar_endereco_empresa(empresa: schemas.EmpresaCreate) -> str:
     ]
     endereco = ", ".join(parte.strip() for parte in partes if parte and parte.strip())
     return endereco or empresa.endereco or ""
+
+
+def montar_endereco_cep(logradouro: Optional[str], numero: Optional[str], complemento: Optional[str], bairro: Optional[str], cidade: Optional[str], uf: Optional[str], cep: Optional[str], fallback: Optional[str] = "") -> str:
+    partes = [logradouro, numero, complemento, bairro, cidade, uf, cep]
+    endereco = ", ".join(parte.strip() for parte in partes if parte and parte.strip())
+    return endereco or (fallback or "")
 
 
 def coluna_excel(indice: int) -> str:
@@ -555,6 +629,182 @@ def excluir_empresa(empresa_id: int, db: Session = Depends(get_db)):
     db.delete(db_empresa)
     db.commit()
     return {"mensagem": "Empresa excluida"}
+
+
+@app.post("/fornecedores/", response_model=schemas.FornecedorResponse, tags=["Fornecedores"])
+def criar_fornecedor(fornecedor: schemas.FornecedorCreate, db: Session = Depends(get_db)):
+    dados = fornecedor.model_dump()
+    dados["nome"] = (dados.get("nome") or "").strip()
+    dados["telefone"] = (dados.get("telefone") or "").strip()
+    dados["cep"] = (dados.get("cep") or "").strip()
+    dados["logradouro"] = (dados.get("logradouro") or "").strip()
+    dados["numero"] = (dados.get("numero") or "").strip()
+    dados["complemento"] = (dados.get("complemento") or "").strip()
+    dados["bairro"] = (dados.get("bairro") or "").strip()
+    dados["cidade"] = (dados.get("cidade") or "").strip()
+    dados["uf"] = (dados.get("uf") or "").strip()
+    dados["marca"] = (dados.get("marca") or "").strip()
+    dados["observacoes"] = (dados.get("observacoes") or "").strip()
+    dados["endereco"] = montar_endereco_cep(
+        dados.get("logradouro"),
+        dados.get("numero"),
+        dados.get("complemento"),
+        dados.get("bairro"),
+        dados.get("cidade"),
+        dados.get("uf"),
+        dados.get("cep"),
+        dados.get("endereco"),
+    )
+
+    if not dados["nome"] or not dados["cep"] or not dados["cidade"] or not dados["marca"]:
+        raise HTTPException(status_code=400, detail="Nome, CEP, cidade e marca sao obrigatorios")
+
+    db_fornecedor = models.Fornecedor(**dados)
+    db.add(db_fornecedor)
+    db.commit()
+    db.refresh(db_fornecedor)
+    return db_fornecedor
+
+
+@app.get("/fornecedores/", response_model=list[schemas.FornecedorResponse], tags=["Fornecedores"])
+def listar_fornecedores(db: Session = Depends(get_db)):
+    return db.query(models.Fornecedor).order_by(models.Fornecedor.nome).all()
+
+
+@app.put("/fornecedores/{fornecedor_id}", response_model=schemas.FornecedorResponse, tags=["Fornecedores"])
+def atualizar_fornecedor(fornecedor_id: int, fornecedor: schemas.FornecedorUpdate, db: Session = Depends(get_db)):
+    db_fornecedor = obter_ou_404(db, models.Fornecedor, fornecedor_id, "Fornecedor nao encontrado")
+    dados = fornecedor.model_dump(exclude_unset=True)
+
+    for campo in ["nome", "telefone", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "uf", "marca", "observacoes"]:
+        if campo in dados:
+            dados[campo] = (dados[campo] or "").strip()
+
+    if "nome" in dados and not dados["nome"]:
+        raise HTTPException(status_code=400, detail="Nome do fornecedor e obrigatorio")
+    if "cep" in dados and not dados["cep"]:
+        raise HTTPException(status_code=400, detail="CEP do fornecedor e obrigatorio")
+    if "cidade" in dados and not dados["cidade"]:
+        raise HTTPException(status_code=400, detail="Cidade do fornecedor e obrigatoria")
+    if "marca" in dados and not dados["marca"]:
+        raise HTTPException(status_code=400, detail="Marca do fornecedor e obrigatoria")
+
+    for campo, valor in dados.items():
+        setattr(db_fornecedor, campo, valor)
+
+    if any(campo in dados for campo in ["cep", "logradouro", "numero", "complemento", "bairro", "cidade", "uf", "endereco"]):
+        db_fornecedor.endereco = montar_endereco_cep(
+            db_fornecedor.logradouro,
+            db_fornecedor.numero,
+            db_fornecedor.complemento,
+            db_fornecedor.bairro,
+            db_fornecedor.cidade,
+            db_fornecedor.uf,
+            db_fornecedor.cep,
+            db_fornecedor.endereco,
+        )
+
+    db.commit()
+    db.refresh(db_fornecedor)
+    return db_fornecedor
+
+
+@app.delete("/fornecedores/{fornecedor_id}", tags=["Fornecedores"])
+def excluir_fornecedor(fornecedor_id: int, db: Session = Depends(get_db)):
+    db_fornecedor = obter_ou_404(db, models.Fornecedor, fornecedor_id, "Fornecedor nao encontrado")
+    db.delete(db_fornecedor)
+    db.commit()
+    return {"mensagem": "Fornecedor excluido"}
+
+
+@app.post("/prestadores-servicos/", response_model=schemas.PrestadorServicoResponse, tags=["Prestadores de servicos"])
+def criar_prestador_servico(prestador: schemas.PrestadorServicoCreate, db: Session = Depends(get_db)):
+    dados = prestador.model_dump()
+    dados["nome"] = (dados.get("nome") or "").strip()
+    dados["telefone"] = (dados.get("telefone") or "").strip()
+    dados["cep"] = (dados.get("cep") or "").strip()
+    dados["logradouro"] = (dados.get("logradouro") or "").strip()
+    dados["numero"] = (dados.get("numero") or "").strip()
+    dados["complemento"] = (dados.get("complemento") or "").strip()
+    dados["bairro"] = (dados.get("bairro") or "").strip()
+    dados["cidade"] = (dados.get("cidade") or "").strip()
+    dados["uf"] = (dados.get("uf") or "").strip()
+    dados["tipo"] = (dados.get("tipo") or "").strip()
+    dados["observacoes"] = (dados.get("observacoes") or "").strip()
+    dados["rua"] = dados["logradouro"]
+    dados["endereco"] = montar_endereco_cep(
+        dados.get("logradouro"),
+        dados.get("numero"),
+        dados.get("complemento"),
+        dados.get("bairro"),
+        dados.get("cidade"),
+        dados.get("uf"),
+        dados.get("cep"),
+        dados.get("endereco"),
+    )
+
+    if not dados["nome"] or not dados["cep"] or not dados["cidade"] or not dados["tipo"]:
+        raise HTTPException(status_code=400, detail="Nome, CEP, cidade e tipo sao obrigatorios")
+
+    db_prestador = models.PrestadorServico(**dados)
+    db.add(db_prestador)
+    db.commit()
+    db.refresh(db_prestador)
+    return db_prestador
+
+
+@app.get("/prestadores-servicos/", response_model=list[schemas.PrestadorServicoResponse], tags=["Prestadores de servicos"])
+def listar_prestadores_servicos(db: Session = Depends(get_db)):
+    return db.query(models.PrestadorServico).order_by(models.PrestadorServico.nome).all()
+
+
+@app.put("/prestadores-servicos/{prestador_id}", response_model=schemas.PrestadorServicoResponse, tags=["Prestadores de servicos"])
+def atualizar_prestador_servico(prestador_id: int, prestador: schemas.PrestadorServicoUpdate, db: Session = Depends(get_db)):
+    db_prestador = obter_ou_404(db, models.PrestadorServico, prestador_id, "Prestador de servico nao encontrado")
+    dados = prestador.model_dump(exclude_unset=True)
+
+    for campo in ["nome", "telefone", "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "uf", "tipo", "observacoes"]:
+        if campo in dados:
+            dados[campo] = (dados[campo] or "").strip()
+
+    if "nome" in dados and not dados["nome"]:
+        raise HTTPException(status_code=400, detail="Nome do prestador e obrigatorio")
+    if "cep" in dados and not dados["cep"]:
+        raise HTTPException(status_code=400, detail="CEP do prestador e obrigatorio")
+    if "cidade" in dados and not dados["cidade"]:
+        raise HTTPException(status_code=400, detail="Cidade do prestador e obrigatoria")
+    if "tipo" in dados and not dados["tipo"]:
+        raise HTTPException(status_code=400, detail="Tipo do prestador e obrigatorio")
+
+    for campo, valor in dados.items():
+        setattr(db_prestador, campo, valor)
+
+    if "logradouro" in dados:
+        db_prestador.rua = db_prestador.logradouro or ""
+
+    if any(campo in dados for campo in ["cep", "logradouro", "numero", "complemento", "bairro", "cidade", "uf", "endereco"]):
+        db_prestador.endereco = montar_endereco_cep(
+            db_prestador.logradouro,
+            db_prestador.numero,
+            db_prestador.complemento,
+            db_prestador.bairro,
+            db_prestador.cidade,
+            db_prestador.uf,
+            db_prestador.cep,
+            db_prestador.endereco,
+        )
+
+    db.commit()
+    db.refresh(db_prestador)
+    return db_prestador
+
+
+@app.delete("/prestadores-servicos/{prestador_id}", tags=["Prestadores de servicos"])
+def excluir_prestador_servico(prestador_id: int, db: Session = Depends(get_db)):
+    db_prestador = obter_ou_404(db, models.PrestadorServico, prestador_id, "Prestador de servico nao encontrado")
+    db.delete(db_prestador)
+    db.commit()
+    return {"mensagem": "Prestador de servico excluido"}
 
 
 @app.post("/fretes/", response_model=schemas.FreteResponse, tags=["Fretes"])

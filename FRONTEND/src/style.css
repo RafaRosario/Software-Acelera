@@ -4688,3 +4688,36 @@ h3,
     width: 100%;
   }
 }
+
+.registry-search {
+  min-width: 250px;
+}
+
+.registry-search input {
+  min-height: 38px;
+}
+
+@media (max-width: 860px) {
+  .registry-search {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+/* Force transparent brand logos without square background artifact */
+.sidebar-brand img,
+.checklist-brand img {
+  background: transparent;
+  border-radius: 50%;
+  box-shadow: none;
+  object-fit: cover;
+}
+
+/* Keep sidebar icons transparent (no white square/card behind) */
+.sidebar-nav .nav-icon,
+.sidebar-nav button.active .nav-icon {
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: none;
+}

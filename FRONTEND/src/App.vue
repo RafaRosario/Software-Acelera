@@ -1,6 +1,7 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import axios from 'axios'
+import { useRoute, useRouter } from 'vue-router'
 import logoAcelera from './assets/logoacelera.png'
 import iconFretes from './assets/icon-fretes.png'
 import iconCriarFrete from './assets/icon-criar-frete.png'
@@ -8,6 +9,9 @@ import iconConcluidos from './assets/icon-concluidos.png'
 import iconCadastro from './assets/icon-cadastro.png'
 import iconMotorista from './assets/icon-motorista.png'
 import iconCaminhao from './assets/icon-caminhao.png'
+import iconFornecedores from './assets/icon-fornecedores.png'
+import iconPrestadores from './assets/icon-prestadores.png'
+import ChecklistPublicView from './views/ChecklistPublicView.vue'
 
 const API_URL = 'http://127.0.0.1:8000'
 const tiposVeiculo = ['Motoboy', 'Fiorino', 'Iveco', '3/4', 'Toco', 'Truk', 'Carreta']
@@ -33,6 +37,22 @@ const statusFiltroFrete = [
   STATUS_CONCLUIDO,
 ]
 
+const router = useRouter()
+const route = useRoute()
+
+const paginaPorRota = {
+  '/fretes': 'fretes',
+  '/concluidos': 'concluidos',
+  '/caminhoes': 'caminhoes',
+  '/motoristas': 'relatorios',
+  '/novo-frete': 'novo-frete',
+  '/cadastros': 'cadastros',
+  '/fornecedores': 'fornecedores',
+  '/prestadores-servicos': 'prestadores-servicos',
+}
+
+const rotaPorPagina = Object.fromEntries(Object.entries(paginaPorRota).map(([rota, pagina]) => [pagina, rota]))
+
 const carregando = ref(false)
 const erro = ref('')
 const aba = ref('fretes')
@@ -42,6 +62,8 @@ const motoristas = ref([])
 const motoristasAlocacao = ref([])
 const veiculos = ref([])
 const empresas = ref([])
+const fornecedores = ref([])
+const prestadoresServicos = ref([])
 const fretes = ref([])
 const filtroDataInicioFretes = ref(new Date().toISOString().slice(0, 10))
 const filtroDataFimFretes = ref(new Date().toISOString().slice(0, 10))
@@ -55,11 +77,14 @@ const dataFimConcluidos = ref('')
 const buscaOrigemFrete = ref('')
 const buscaEmpresaColeta = ref('')
 const buscaDestinoFrete = ref('')
+const buscaMotoristasCadastro = ref('')
+const buscaVeiculosCadastro = ref('')
+const buscaEmpresasCadastro = ref('')
 const toast = ref(null)
 const freteArrastandoId = ref(null)
 const statusDestinoAtivo = ref('')
 const freteAbertoId = ref(null)
-const menuStatusFrete = ref({ aberto: false, x: 0, y: 0, frete: null })
+const menuStatusFrete = ref({ aberto: false, x: 0, y: 0, maxHeight: 420, frete: null })
 const filtroSituacaoVeiculo = ref('Todos')
 const filtroTipoVeiculo = ref('Todos')
 const veiculoIndisponibilidadeAberto = ref(null)
@@ -67,13 +92,15 @@ const motivoIndisponibilidadeVeiculo = ref('')
 const motoristaEditandoId = ref(null)
 const veiculoEditandoId = ref(null)
 const empresaEditandoId = ref(null)
+const fornecedorEditandoId = ref(null)
+const prestadorEditandoId = ref(null)
 const freteEditandoId = ref(null)
 const abaRetornoEdicaoFrete = ref('fretes')
 const sidebarRecolhida = ref(false)
 const menuMobileAberto = ref(false)
 const avisoPendenciasMostrado = ref(false)
-const checklistToken = window.location.pathname.match(/^\/checklist\/([^/]+)/)?.[1] || ''
-const modoChecklist = computed(() => Boolean(checklistToken))
+const checklistToken = computed(() => String(route.params.token || ''))
+const modoChecklist = computed(() => Boolean(checklistToken.value))
 const checklistCarregando = ref(false)
 const checklistSalvando = ref(false)
 const checklistErro = ref('')
@@ -88,15 +115,23 @@ const checklistResposta = ref({
   observacoes: '',
 })
 const itensChecklistCaminhao = [
-  { chave: 'tacografo', rotulo: 'Tacografo' },
+  { chave: 'tacografo', rotulo: 'Tacógrafo' },
   { chave: 'pneus', rotulo: 'Pneus' },
-  { chave: 'oleo', rotulo: 'Oleo' },
+  { chave: 'oleo', rotulo: 'Óleo' },
   { chave: 'avarias_externas', rotulo: 'Avarias externas' },
   { chave: 'avarias_internas', rotulo: 'Avarias internas' },
 ]
+const respostaChecklistVazia = () => ({
+  tacografo: null,
+  pneus: null,
+  oleo: null,
+  avarias_externas: null,
+  avarias_internas: null,
+  observacoes: '',
+})
 
 const novoMotorista = ref({ nome: '', telefone: '', rg: '', cpf: '', cnh: '', observacoes: '' })
-const novoVeiculo = ref({ placa: '', tipo: 'Truk', observacoes: '' })
+const novoVeiculo = ref({ placa: '', tipo: 'Truk', observacoes: '', observacao_estado: '' })
 const novaEmpresa = ref({
   nome: '',
   cnpj: '',
@@ -109,6 +144,35 @@ const novaEmpresa = ref({
   cidade: '',
   uf: '',
   endereco: '',
+  observacoes: '',
+})
+const novoFornecedor = ref({
+  nome: '',
+  telefone: '',
+  cep: '',
+  logradouro: '',
+  numero: '',
+  complemento: '',
+  bairro: '',
+  endereco: '',
+  cidade: '',
+  uf: '',
+  marca: '',
+  observacoes: '',
+})
+const tiposPrestadorServico = ['valvula', 'mecanicos', 'bombistas']
+const novoPrestadorServico = ref({
+  nome: '',
+  telefone: '',
+  cep: '',
+  logradouro: '',
+  numero: '',
+  complemento: '',
+  bairro: '',
+  cidade: '',
+  uf: '',
+  endereco: '',
+  tipo: tiposPrestadorServico[0],
   observacoes: '',
 })
 const criarFormularioFreteVazio = (dataColeta = new Date().toISOString().slice(0, 10)) => ({
@@ -137,12 +201,12 @@ const paginas = {
     resumo: 'FRETES',
   },
   concluidos: {
-    titulo: 'Concluidos',
-    resumo: 'CONCLUIDOS',
+    titulo: 'Concluídos',
+    resumo: 'CONCLUÍDOS',
   },
   caminhoes: {
-    titulo: 'Caminhoes',
-    resumo: 'CAMINHAO',
+    titulo: 'Caminhões',
+    resumo: 'CAMINHÃO',
   },
   relatorios: {
     titulo: 'Motoristas',
@@ -156,6 +220,14 @@ const paginas = {
     titulo: 'Cadastros',
     resumo: 'CADASTRO',
   },
+  fornecedores: {
+    titulo: 'Fornecedores',
+    resumo: 'FORNECEDORES',
+  },
+  'prestadores-servicos': {
+    titulo: 'Prestadores de serviços',
+    resumo: 'PRESTADORES',
+  },
 }
 
 const paginaAtual = computed(() => {
@@ -168,34 +240,72 @@ const paginaAtual = computed(() => {
   return paginas[aba.value] || paginas.fretes
 })
 
+const navegarParaPagina = (pagina, cadastro = null, substituir = false) => {
+  if (modoChecklist.value) return
+
+  const path = rotaPorPagina[pagina] || '/fretes'
+  const query = pagina === 'cadastros' ? { cadastro: cadastro || cadastroAtivo.value || 'motoristas' } : undefined
+  const queryAtual = typeof route.query.cadastro === 'string' ? route.query.cadastro : null
+  const queryDestino = query?.cadastro || null
+
+  if (route.path === path && queryAtual === queryDestino) return
+
+  const navegar = substituir ? router.replace : router.push
+  navegar({ path, query }).catch(() => {})
+}
+
+const selecionarCadastroAtivo = (cadastro) => {
+  cadastroAtivo.value = cadastro
+  if (aba.value === 'cadastros') navegarParaPagina('cadastros', cadastro, true)
+}
+
+const sincronizarRotaComEstado = () => {
+  if (modoChecklist.value) return
+
+  const pagina = paginaPorRota[route.path] || 'fretes'
+  if (aba.value !== pagina) aba.value = pagina
+
+  if (pagina === 'cadastros') {
+    const cadastro = String(route.query.cadastro || 'motoristas')
+    if (['motoristas', 'veiculos', 'empresas'].includes(cadastro)) {
+      cadastroAtivo.value = cadastro
+    }
+  }
+}
+
 const abrirPagina = (pagina, cadastro = null) => {
   aba.value = pagina
   if (cadastro) cadastroAtivo.value = cadastro
   menuMobileAberto.value = false
+  navegarParaPagina(pagina, cadastro)
 }
 
 const carregarTudo = async () => {
   carregando.value = true
   erro.value = ''
   try {
-    const [motoristasResp, alocacaoResp, veiculosResp, empresasResp, fretesResp] = await Promise.all([
+    const [motoristasResp, alocacaoResp, veiculosResp, empresasResp, fretesResp, fornecedoresResp, prestadoresResp] = await Promise.all([
       axios.get(`${API_URL}/motoristas/`),
       axios.get(`${API_URL}/motoristas/alocacao/`),
       axios.get(`${API_URL}/veiculos/`),
       axios.get(`${API_URL}/empresas/`),
       axios.get(`${API_URL}/fretes/`),
+      axios.get(`${API_URL}/fornecedores/`),
+      axios.get(`${API_URL}/prestadores-servicos/`),
     ])
     motoristas.value = motoristasResp.data
     motoristasAlocacao.value = alocacaoResp.data
     veiculos.value = veiculosResp.data
     empresas.value = empresasResp.data
     fretes.value = fretesResp.data
+    fornecedores.value = fornecedoresResp.data
+    prestadoresServicos.value = prestadoresResp.data
     if (!avisoPendenciasMostrado.value && fretesResp.data.some(freteEstaAtrasado)) {
       avisoPendenciasMostrado.value = true
-      mostrarToast('Existem fretes antigos em aberto. Revise as pendencias.', 'error')
+      mostrarToast('Existem fretes antigos em aberto. Revise as pendências.', 'error')
     }
   } catch (error) {
-    erro.value = 'Nao foi possivel conectar na API. Verifique se o backend esta rodando.'
+    erro.value = 'Não foi possível conectar na API. Verifique se o backend está rodando.'
   } finally {
     carregando.value = false
   }
@@ -246,7 +356,7 @@ function freteEstaAtrasado(frete) {
 
 const textoAtrasoFrete = (frete) => {
   const dias = diasAbertoFrete(frete)
-  return dias === 1 ? 'Aberto ha 1 dia' : `Aberto ha ${dias} dias`
+  return dias === 1 ? 'Aberto há 1 dia' : `Aberto há ${dias} dias`
 }
 
 function dataConferePeriodoFretes(dataFrete) {
@@ -294,12 +404,17 @@ const limparFiltroPendenciasAntigas = () => {
 }
 
 const statusVisualFrete = (status) => {
-  if (status === 'Aguardando horario') return 'Aguardando horario'
-  if (statusEhConcluido(status)) return 'concluido'
+  if (status === 'Aguardando horario') return 'Aguardando horário'
+  if (statusEhConcluido(status)) return 'Concluído'
   return 'Em andamento'
 }
 
-const classeStatusVisualFrete = (status) => statusVisualFrete(status).toLowerCase().replaceAll(' ', '-')
+const classeStatusVisualFrete = (status) =>
+  statusVisualFrete(status)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replaceAll(' ', '-')
 
 const totais = computed(() => ({
   aguardando: fretesPorData.value.filter((frete) => frete.status === 'Aguardando horario').length,
@@ -474,9 +589,75 @@ const empresasClientes = computed(() => {
   return empresas.value.filter((empresa) => empresa.cliente)
 })
 
+const normalizarTextoBusca = (valor) => {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+const motoristasCadastroFiltrados = computed(() => {
+  const termo = normalizarTextoBusca(buscaMotoristasCadastro.value)
+  if (!termo) return motoristas.value
+
+  return motoristas.value.filter((motorista) => {
+    const dados = [
+      motorista.nome,
+      motorista.telefone,
+      motorista.cpf,
+      motorista.rg,
+      motorista.cnh,
+      motorista.observacoes,
+    ]
+      .filter(Boolean)
+      .join(' ')
+
+    return normalizarTextoBusca(dados).includes(termo)
+  })
+})
+
+const veiculosCadastroFiltrados = computed(() => {
+  const termo = normalizarTextoBusca(buscaVeiculosCadastro.value)
+  if (!termo) return veiculos.value
+
+  return veiculos.value.filter((veiculo) => {
+    const dados = [veiculo.placa, veiculo.tipo, veiculo.observacoes, veiculo.observacao_estado, veiculo.motivo_indisponibilidade]
+      .filter(Boolean)
+      .join(' ')
+
+    return normalizarTextoBusca(dados).includes(termo)
+  })
+})
+
+const empresasCadastroFiltradas = computed(() => {
+  const termo = normalizarTextoBusca(buscaEmpresasCadastro.value)
+  if (!termo) return empresas.value
+
+  return empresas.value.filter((empresa) => {
+    const dados = [
+      empresa.nome,
+      empresa.cnpj,
+      empresa.cep,
+      empresa.logradouro,
+      empresa.numero,
+      empresa.complemento,
+      empresa.bairro,
+      empresa.cidade,
+      empresa.uf,
+      empresa.endereco,
+      empresa.observacoes,
+    ]
+      .filter(Boolean)
+      .join(' ')
+
+    return normalizarTextoBusca(dados).includes(termo)
+  })
+})
+
 const nomeMotorista = (id) => motoristas.value.find((motorista) => motorista.id === id)?.nome || 'Sem motorista'
 const telefoneMotorista = (id) => motoristas.value.find((motorista) => motorista.id === id)?.telefone || ''
-const placaVeiculo = (id) => veiculos.value.find((veiculo) => veiculo.id === id)?.placa || 'Sem caminhao'
+const placaVeiculo = (id) => veiculos.value.find((veiculo) => veiculo.id === id)?.placa || 'Sem caminhão'
 const veiculoPorId = (id) => veiculos.value.find((veiculo) => veiculo.id === id)
 
 const pontosColetaFrete = (frete) => {
@@ -543,24 +724,31 @@ const fretesPorStatusKanban = (status) => {
 const freteDetalhe = computed(() => fretes.value.find((frete) => frete.id === freteAbertoId.value))
 
 const rotuloStatusFrete = (status) => {
-  if (status === STATUS_COLETADO_P1) return 'aguardando coleta P1'
-  if (status === STATUS_CAMINHO_DESTINO) return 'coletado P1, a caminho do destino'
+  if (status === STATUS_AGUARDANDO) return 'Aguardando horário'
+  if (status === STATUS_CAMINHO_P1) return 'A caminho do P1'
+  if (status === STATUS_COLETADO_P1) return 'Aguardando coleta no P1'
+  if (status === STATUS_CAMINHO_PONTO_ADICIONAL) return 'A caminho do ponto adicional'
+  if (status === STATUS_PONTOS_ADICIONAIS) return 'Pontos adicionais'
+  if (status === STATUS_CAMINHO_DESTINO) return 'Coletado no P1, a caminho do destino'
+  if (status === STATUS_CHEGADA_DESTINO) return 'Chegada ao destino'
+  if (status === STATUS_RETORNANDO) return 'Retornando'
+  if (statusEhConcluido(status)) return 'Concluído'
   return status
 }
 
 const classeStatusKanban = (status) => status.toLowerCase().replaceAll(' ', '-')
 
 const subtituloStatusKanban = (status) => {
-  if (status === STATUS_AGUARDANDO) return 'Ainda nao saiu'
+  if (status === STATUS_AGUARDANDO) return 'Ainda não saiu'
   if (status === STATUS_CAMINHO_P1) return 'Indo para a coleta'
-  if (status === STATUS_COLETADO_P1) return 'Aguardando confirmacao da coleta'
+  if (status === STATUS_COLETADO_P1) return 'Aguardando confirmação da coleta'
   if (status === STATUS_CAMINHO_PONTO_ADICIONAL) return 'Indo para parada extra'
   if (status === STATUS_PONTOS_ADICIONAIS) return 'Paradas extras feitas'
   if (status === STATUS_CAMINHO_DESTINO) return 'Coleta feita, indo para entrega'
   if (status === STATUS_CHEGADA_DESTINO) return 'No destino'
   if (status === STATUS_RETORNANDO) return 'Voltando com retorno'
   if (status === STATUS_CONCLUIDO) return 'Finalizado'
-  return 'Em operacao'
+  return 'Em operação'
 }
 
 const abrirFreteDetalhe = (id) => {
@@ -580,24 +768,38 @@ const horarioFrete = (frete) => frete.horario_coleta?.slice(0, 5) || '--:--'
 const abrirMenuStatusFrete = (event, frete) => {
   const alvo = event?.currentTarget
   const caixa = alvo?.getBoundingClientRect?.()
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight
+  const larguraMenu = 250
+  const margemMenu = 16
+  const totalStatus = statusDisponiveisFrete(frete).length
+  const alturaNatural = Math.min(420, 88 + totalStatus * 38)
+  const ehTelaMenor = window.matchMedia?.('(max-width: 860px)').matches ?? viewportWidth <= 860
+  const maxHeight = ehTelaMenor
+    ? Math.round(Math.min(560, viewportHeight * 0.78))
+    : Math.min(alturaNatural, Math.max(180, viewportHeight - margemMenu * 2))
   const x = event?.clientX ?? (caixa ? caixa.left + caixa.width / 2 : window.innerWidth / 2)
   const y = event?.clientY ?? (caixa ? caixa.top + caixa.height : window.innerHeight / 2)
+  const xMaximo = Math.max(margemMenu, viewportWidth - larguraMenu - margemMenu)
+  const yMaximo = Math.max(margemMenu, viewportHeight - maxHeight - margemMenu)
+
   menuStatusFrete.value = {
     aberto: true,
-    x: Math.min(x, window.innerWidth - 260),
-    y: Math.min(y, window.innerHeight - 320),
+    x: Math.max(margemMenu, Math.min(x, xMaximo)),
+    y: Math.max(margemMenu, Math.min(y, yMaximo)),
+    maxHeight,
     frete,
   }
 }
 
 const fecharMenuStatusFrete = () => {
-  menuStatusFrete.value = { aberto: false, x: 0, y: 0, frete: null }
+  menuStatusFrete.value = { aberto: false, x: 0, y: 0, maxHeight: 420, frete: null }
 }
 
 const moverFreteParaStatus = async (frete, status) => {
   if (!frete) return
   if (!statusDisponiveisFrete(frete).includes(status)) {
-    mostrarToast('Este status nao existe para este frete.', 'error')
+    mostrarToast('Este status não existe para este frete.', 'error')
     fecharMenuStatusFrete()
     return
   }
@@ -612,13 +814,13 @@ const moverFreteParaStatus = async (frete, status) => {
 }
 
 const resumoStatusEdscha = (frete) => {
-  if (frete.status === STATUS_AGUARDANDO) return 'aguardando horario'
+  if (frete.status === STATUS_AGUARDANDO) return 'aguardando horário'
   if (frete.status === STATUS_CAMINHO_P1) return `a caminho ${frete.origem}`
   if (frete.status === STATUS_COLETADO_P1) return `aguardando coleta ${frete.origem}`
-  if (frete.status === STATUS_CAMINHO_PONTO_ADICIONAL) return 'a caminho ponto adicional'
-  if (statusEhPontoAdicional(frete.status)) return 'pontos adicionais coletados'
+  if (frete.status === STATUS_CAMINHO_PONTO_ADICIONAL) return 'coleta realizada, a caminho ponto adicional'
+  if (statusEhPontoAdicional(frete.status)) return 'pontos adicionais coletados, em direção ao destino final'
   if (frete.status === STATUS_CAMINHO_DESTINO) return `coletado ${frete.origem}, a caminho do destino`
-  if (frete.status === STATUS_CHEGADA_DESTINO) return `chegada no destino ${frete.destino}`
+  if (frete.status === STATUS_CHEGADA_DESTINO) return `aguardando para descarregar ${frete.destino}`
   if (frete.status === STATUS_RETORNANDO) return 'retornando'
   if (statusEhConcluido(frete.status)) return '✅'
   return statusVisualFrete(frete.status).toLowerCase()
@@ -634,7 +836,7 @@ const gerarAtualizacaoEdscha = () => {
   const fretesAtualizacao = fretesFiltrados.value.filter((frete) => frete.status !== STATUS_CANCELADA && !freteEhRetorno(frete))
 
   if (fretesAtualizacao.length === 0) {
-    mostrarToast('Nao ha fretes para atualizar neste filtro.', 'error')
+    mostrarToast('Não há fretes para atualizar neste filtro.', 'error')
     return ''
   }
 
@@ -645,7 +847,7 @@ const copiarAtualizacaoEdscha = async () => {
   const mensagem = gerarAtualizacaoEdscha()
   if (!mensagem) return
   await navigator.clipboard.writeText(mensagem)
-  mostrarToast('Atualizacao Edscha copiada.')
+  mostrarToast('Atualização Edscha copiada.')
 }
 
 const normalizarAlocacao = (frete) => ({
@@ -714,7 +916,7 @@ const salvarComFeedback = async (mensagem, acao) => {
     await acao()
     mostrarToast(mensagem)
   } catch (error) {
-    mostrarToast('Nao foi possivel salvar. Tente novamente.', 'error')
+    mostrarToast('Não foi possível salvar. Tente novamente.', 'error')
   }
 }
 
@@ -725,7 +927,7 @@ const limparMotorista = () => {
 
 const limparVeiculo = () => {
   veiculoEditandoId.value = null
-  novoVeiculo.value = { placa: '', tipo: 'Truk', observacoes: '' }
+  novoVeiculo.value = { placa: '', tipo: 'Truk', observacoes: '', observacao_estado: '' }
 }
 
 const limparEmpresa = () => {
@@ -742,6 +944,42 @@ const limparEmpresa = () => {
     cidade: '',
     uf: '',
     endereco: '',
+    observacoes: '',
+  }
+}
+
+const limparFornecedor = () => {
+  fornecedorEditandoId.value = null
+  novoFornecedor.value = {
+    nome: '',
+    telefone: '',
+    cep: '',
+    logradouro: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    endereco: '',
+    cidade: '',
+    uf: '',
+    marca: '',
+    observacoes: '',
+  }
+}
+
+const limparPrestadorServico = () => {
+  prestadorEditandoId.value = null
+  novoPrestadorServico.value = {
+    nome: '',
+    telefone: '',
+    cep: '',
+    logradouro: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
+    endereco: '',
+    tipo: tiposPrestadorServico[0],
     observacoes: '',
   }
 }
@@ -813,6 +1051,7 @@ const editarVeiculo = (veiculo) => {
     placa: veiculo.placa || '',
     tipo: veiculo.tipo || 'Truk',
     observacoes: veiculo.observacoes || '',
+    observacao_estado: veiculo.observacao_estado || '',
   }
 }
 
@@ -834,17 +1073,53 @@ const editarEmpresa = (empresa) => {
   }
 }
 
+const editarFornecedor = (fornecedor) => {
+  fornecedorEditandoId.value = fornecedor.id
+  novoFornecedor.value = {
+    nome: fornecedor.nome || '',
+    telefone: fornecedor.telefone || '',
+    cep: fornecedor.cep || '',
+    logradouro: fornecedor.logradouro || '',
+    numero: fornecedor.numero || '',
+    complemento: fornecedor.complemento || '',
+    bairro: fornecedor.bairro || '',
+    endereco: fornecedor.endereco || '',
+    cidade: fornecedor.cidade || '',
+    uf: fornecedor.uf || '',
+    marca: fornecedor.marca || '',
+    observacoes: fornecedor.observacoes || '',
+  }
+}
+
+const editarPrestadorServico = (prestador) => {
+  prestadorEditandoId.value = prestador.id
+  novoPrestadorServico.value = {
+    nome: prestador.nome || '',
+    telefone: prestador.telefone || '',
+    cep: prestador.cep || '',
+    logradouro: prestador.logradouro || prestador.rua || '',
+    numero: prestador.numero || '',
+    complemento: prestador.complemento || '',
+    bairro: prestador.bairro || '',
+    cidade: prestador.cidade || '',
+    uf: prestador.uf || '',
+    endereco: prestador.endereco || '',
+    tipo: prestador.tipo || tiposPrestadorServico[0],
+    observacoes: prestador.observacoes || '',
+  }
+}
+
 const cadastrarMotorista = async () => {
   aplicarMascaraRgMotorista()
   aplicarMascaraCpfMotorista()
 
   if (!rgValido(novoMotorista.value.rg)) {
-    mostrarToast('RG invalido. Confira o numero informado.', 'error')
+    mostrarToast('RG inválido. Confira o número informado.', 'error')
     return
   }
 
   if (!cpfValido(novoMotorista.value.cpf)) {
-    mostrarToast('CPF invalido. Confira os digitos.', 'error')
+    mostrarToast('CPF inválido. Confira os dígitos.', 'error')
     return
   }
 
@@ -864,6 +1139,7 @@ const cadastrarVeiculo = async () => {
   const payload = {
     ...novoVeiculo.value,
     placa: novoVeiculo.value.placa.trim(),
+    observacao_estado: (novoVeiculo.value.observacao_estado || '').trim(),
   }
 
   try {
@@ -871,16 +1147,16 @@ const cadastrarVeiculo = async () => {
       await axios.put(`${API_URL}/veiculos/${veiculoEditandoId.value}`, payload)
       limparVeiculo()
       await carregarTudo()
-      mostrarToast('Caminhao atualizado com sucesso.')
+      mostrarToast('Caminhão atualizado com sucesso.')
       return
     }
 
     await axios.post(`${API_URL}/veiculos/`, payload)
     limparVeiculo()
     await carregarTudo()
-    mostrarToast('Caminhao cadastrado com sucesso.')
+    mostrarToast('Caminhão cadastrado com sucesso.')
   } catch (error) {
-    mostrarToast(error.response?.data?.detail || 'Nao foi possivel salvar o caminhao.', 'error')
+    mostrarToast(error.response?.data?.detail || 'Não foi possível salvar o caminhão.', 'error')
   }
 }
 
@@ -897,10 +1173,88 @@ const cadastrarEmpresa = async () => {
   await carregarTudo()
 }
 
+const cadastrarFornecedor = async () => {
+  const payload = {
+    nome: (novoFornecedor.value.nome || '').trim(),
+    telefone: (novoFornecedor.value.telefone || '').trim(),
+    cep: (novoFornecedor.value.cep || '').trim(),
+    logradouro: (novoFornecedor.value.logradouro || '').trim(),
+    numero: (novoFornecedor.value.numero || '').trim(),
+    complemento: (novoFornecedor.value.complemento || '').trim(),
+    bairro: (novoFornecedor.value.bairro || '').trim(),
+    cidade: (novoFornecedor.value.cidade || '').trim(),
+    uf: (novoFornecedor.value.uf || '').trim(),
+    endereco: (novoFornecedor.value.endereco || '').trim(),
+    marca: (novoFornecedor.value.marca || '').trim(),
+    observacoes: (novoFornecedor.value.observacoes || '').trim(),
+  }
+
+  if (!payload.nome || !payload.cep || !payload.cidade || !payload.marca) {
+    mostrarToast('Nome, CEP, cidade e marca do fornecedor são obrigatórios.', 'error')
+    return
+  }
+
+  try {
+    if (fornecedorEditandoId.value) {
+      await axios.put(`${API_URL}/fornecedores/${fornecedorEditandoId.value}`, payload)
+      limparFornecedor()
+      await carregarTudo()
+      mostrarToast('Fornecedor atualizado com sucesso.')
+      return
+    }
+
+    await axios.post(`${API_URL}/fornecedores/`, payload)
+    limparFornecedor()
+    await carregarTudo()
+    mostrarToast('Fornecedor cadastrado com sucesso.')
+  } catch (error) {
+    mostrarToast(error.response?.data?.detail || 'Não foi possível salvar o fornecedor.', 'error')
+  }
+}
+
+const cadastrarPrestadorServico = async () => {
+  const payload = {
+    nome: (novoPrestadorServico.value.nome || '').trim(),
+    telefone: (novoPrestadorServico.value.telefone || '').trim(),
+    cep: (novoPrestadorServico.value.cep || '').trim(),
+    logradouro: (novoPrestadorServico.value.logradouro || '').trim(),
+    numero: (novoPrestadorServico.value.numero || '').trim(),
+    complemento: (novoPrestadorServico.value.complemento || '').trim(),
+    bairro: (novoPrestadorServico.value.bairro || '').trim(),
+    cidade: (novoPrestadorServico.value.cidade || '').trim(),
+    uf: (novoPrestadorServico.value.uf || '').trim(),
+    endereco: (novoPrestadorServico.value.endereco || '').trim(),
+    tipo: (novoPrestadorServico.value.tipo || '').trim(),
+    observacoes: (novoPrestadorServico.value.observacoes || '').trim(),
+  }
+
+  if (!payload.nome || !payload.cep || !payload.cidade || !payload.tipo) {
+    mostrarToast('Nome, CEP, cidade e tipo do prestador são obrigatórios.', 'error')
+    return
+  }
+
+  try {
+    if (prestadorEditandoId.value) {
+      await axios.put(`${API_URL}/prestadores-servicos/${prestadorEditandoId.value}`, payload)
+      limparPrestadorServico()
+      await carregarTudo()
+      mostrarToast('Prestador atualizado com sucesso.')
+      return
+    }
+
+    await axios.post(`${API_URL}/prestadores-servicos/`, payload)
+    limparPrestadorServico()
+    await carregarTudo()
+    mostrarToast('Prestador cadastrado com sucesso.')
+  } catch (error) {
+    mostrarToast(error.response?.data?.detail || 'Não foi possível salvar o prestador.', 'error')
+  }
+}
+
 const buscarCepEmpresa = async () => {
   const cep = novaEmpresa.value.cep.replace(/\D/g, '')
   if (cep.length !== 8) {
-    erro.value = 'Informe um CEP com 8 digitos.'
+    erro.value = 'Informe um CEP com 8 dígitos.'
     return
   }
 
@@ -909,7 +1263,7 @@ const buscarCepEmpresa = async () => {
   const dados = await response.json()
 
   if (dados.erro) {
-    erro.value = 'CEP nao encontrado.'
+    erro.value = 'CEP não encontrado.'
     return
   }
 
@@ -919,6 +1273,54 @@ const buscarCepEmpresa = async () => {
   novaEmpresa.value.bairro = dados.bairro || ''
   novaEmpresa.value.cidade = dados.localidade || ''
   novaEmpresa.value.uf = dados.uf || ''
+}
+
+const buscarCepFornecedor = async () => {
+  const cep = (novoFornecedor.value.cep || '').replace(/\D/g, '')
+  if (cep.length !== 8) {
+    erro.value = 'Informe um CEP com 8 dígitos.'
+    return
+  }
+
+  erro.value = ''
+  const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+  const dados = await response.json()
+
+  if (dados.erro) {
+    erro.value = 'CEP não encontrado.'
+    return
+  }
+
+  novoFornecedor.value.cep = dados.cep || novoFornecedor.value.cep
+  novoFornecedor.value.logradouro = dados.logradouro || ''
+  novoFornecedor.value.complemento = dados.complemento || ''
+  novoFornecedor.value.bairro = dados.bairro || ''
+  novoFornecedor.value.cidade = dados.localidade || ''
+  novoFornecedor.value.uf = dados.uf || ''
+}
+
+const buscarCepPrestadorServico = async () => {
+  const cep = (novoPrestadorServico.value.cep || '').replace(/\D/g, '')
+  if (cep.length !== 8) {
+    erro.value = 'Informe um CEP com 8 dígitos.'
+    return
+  }
+
+  erro.value = ''
+  const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+  const dados = await response.json()
+
+  if (dados.erro) {
+    erro.value = 'CEP não encontrado.'
+    return
+  }
+
+  novoPrestadorServico.value.cep = dados.cep || novoPrestadorServico.value.cep
+  novoPrestadorServico.value.logradouro = dados.logradouro || ''
+  novoPrestadorServico.value.complemento = dados.complemento || ''
+  novoPrestadorServico.value.bairro = dados.bairro || ''
+  novoPrestadorServico.value.cidade = dados.localidade || ''
+  novoPrestadorServico.value.uf = dados.uf || ''
 }
 
 const payloadFormularioFrete = () => ({
@@ -958,7 +1360,7 @@ const cadastrarFrete = async () => {
 
   await axios.post(`${API_URL}/fretes/`, payload)
   limparFormularioFrete()
-  aba.value = 'fretes'
+  abrirPagina('fretes')
   await carregarTudo()
 }
 
@@ -1025,7 +1427,7 @@ const soltarFreteEmStatus = async (event, status) => {
   }
 
   if (!statusDisponiveisFrete(frete).includes(status)) {
-    mostrarToast('Este status nao existe para este frete.', 'error')
+    mostrarToast('Este status não existe para este frete.', 'error')
     encerrarArrastoFrete()
     return
   }
@@ -1162,7 +1564,7 @@ const confirmarIndisponibilidadeVeiculo = async () => {
     return
   }
 
-  await salvarComFeedback('Caminhao marcado como indisponivel.', async () => {
+  await salvarComFeedback('Caminhão marcado como indisponível.', async () => {
     await axios.put(`${API_URL}/veiculos/${veiculoIndisponibilidadeAberto.value.id}`, {
       ativo: false,
       motivo_indisponibilidade: motivo,
@@ -1173,7 +1575,7 @@ const confirmarIndisponibilidadeVeiculo = async () => {
 }
 
 const liberarVeiculo = async (veiculo) => {
-  await salvarComFeedback('Caminhao liberado para uso.', async () => {
+  await salvarComFeedback('Caminhão liberado para uso.', async () => {
     await axios.put(`${API_URL}/veiculos/${veiculo.id}`, {
       ativo: true,
       motivo_indisponibilidade: '',
@@ -1182,8 +1584,28 @@ const liberarVeiculo = async (veiculo) => {
   })
 }
 
+const salvarObservacaoEstadoVeiculo = async (veiculo) => {
+  if (!veiculo?.id) return
+  await salvarComFeedback('Estado do caminhão salvo.', async () => {
+    await axios.put(`${API_URL}/veiculos/${veiculo.id}`, {
+      observacao_estado: (veiculo.observacao_estado || '').trim(),
+    })
+    await carregarTudo()
+  })
+}
+
 const excluirEmpresa = async (id) => {
   await axios.delete(`${API_URL}/empresas/${id}`)
+  await carregarTudo()
+}
+
+const excluirFornecedor = async (id) => {
+  await axios.delete(`${API_URL}/fornecedores/${id}`)
+  await carregarTudo()
+}
+
+const excluirPrestadorServico = async (id) => {
+  await axios.delete(`${API_URL}/prestadores-servicos/${id}`)
   await carregarTudo()
 }
 
@@ -1199,7 +1621,7 @@ const carregarChecklistPublico = async () => {
   checklistCarregando.value = true
   checklistErro.value = ''
   try {
-    const resposta = await axios.get(`${API_URL}/checklists/${checklistToken}`)
+    const resposta = await axios.get(`${API_URL}/checklists/${checklistToken.value}`)
     checklistPublico.value = resposta.data
     checklistResposta.value = {
       tacografo: resposta.data.confirmado ? Boolean(resposta.data.tacografo) : null,
@@ -1210,10 +1632,10 @@ const carregarChecklistPublico = async () => {
       observacoes: resposta.data.observacoes || '',
     }
     if (resposta.data.confirmado) {
-      checklistSucesso.value = 'Checklist ja confirmado.'
+      checklistSucesso.value = 'Checklist já confirmado.'
     }
   } catch (error) {
-    checklistErro.value = 'Checklist nao encontrado ou API indisponivel.'
+    checklistErro.value = 'Checklist não encontrado ou API indisponível.'
   } finally {
     checklistCarregando.value = false
   }
@@ -1229,17 +1651,17 @@ const confirmarChecklistPublico = async () => {
   }
 
   if (checklistRespostaTemApontamento.value && !checklistResposta.value.observacoes.trim()) {
-    checklistErro.value = 'Informe uma observacao para o item com problema.'
+    checklistErro.value = 'Informe uma observação para o item com problema.'
     return
   }
 
   checklistSalvando.value = true
   try {
-    const resposta = await axios.put(`${API_URL}/checklists/${checklistToken}`, checklistResposta.value)
+    const resposta = await axios.put(`${API_URL}/checklists/${checklistToken.value}`, checklistResposta.value)
     checklistPublico.value = resposta.data
     checklistSucesso.value = 'Checklist confirmado com sucesso.'
   } catch (error) {
-    checklistErro.value = 'Nao foi possivel confirmar o checklist.'
+    checklistErro.value = 'Não foi possível confirmar o checklist.'
   } finally {
     checklistSalvando.value = false
   }
@@ -1277,14 +1699,14 @@ const dataHoraChecklistFrete = (frete) => {
 }
 
 const checklistCaminhaoMensagem = (frete, veiculo) => {
-  const tipo = veiculo?.tipo || frete.tipo_caminhao_necessario || 'caminhao'
+  const tipo = veiculo?.tipo || frete.tipo_caminhao_necessario || 'caminhão'
   const placa = veiculo?.placa || placaVeiculo(frete.veiculo_id)
   const link = linkChecklistFrete(frete)
 
   return [
-    `Checklist caminhao ${tipo} - placa ${placa}`,
+    `Checklist caminhão ${tipo} - placa ${placa}`,
     'Confirme a vistoria pelo link:',
-    link || 'Link do checklist ainda nao gerado. Atualize o frete e copie a mensagem novamente.',
+    link || 'Link do checklist ainda não gerado. Atualize o frete e copie a mensagem novamente.',
   ].join('\n')
 }
 
@@ -1390,14 +1812,14 @@ const exportarHistoricoMotoristas = () => {
 const excluirConcluidosFiltrados = async () => {
   const total = fretesConcluidosFiltrados.value.length
   if (total === 0) {
-    mostrarToast('Nao ha fretes concluidos neste filtro.', 'error')
+    mostrarToast('Não há fretes concluídos neste filtro.', 'error')
     return
   }
 
-  const confirmou = window.confirm(`Voce deseja excluir todos os ${total} fretes concluidos deste filtro?`)
+  const confirmou = window.confirm(`Você deseja excluir todos os ${total} fretes concluídos deste filtro?`)
   if (!confirmou) return
 
-  await salvarComFeedback('Fretes concluidos excluidos com sucesso.', async () => {
+  await salvarComFeedback('Fretes concluídos excluídos com sucesso.', async () => {
     const query = periodoExportacaoConcluidos()
     await axios.delete(`${API_URL}/fretes/concluidos${query ? `?${query}` : ''}`)
     await carregarTudo()
@@ -1414,7 +1836,7 @@ const empresaPorNome = (nome) => empresasPorNome.value[nome]
 
 const enderecoPorNomeEmpresa = (nome) => {
   const empresa = empresaPorNome(nome)
-  return empresa ? enderecoEmpresa(empresa) : 'Endereco nao cadastrado'
+  return empresa ? enderecoEmpresa(empresa) : 'Endereço não cadastrado'
 }
 
 const pontosMensagemFrete = (frete) => {
@@ -1426,85 +1848,282 @@ const pontosMensagemFrete = (frete) => {
   return [frete.origem, ...adicionais, frete.destino].filter(Boolean)
 }
 
-onMounted(() => {
-  if (modoChecklist.value) {
-    carregarChecklistPublico()
-    return
-  }
+const viewState = reactive({
+  API_URL,
+  tiposVeiculo,
+  STATUS_AGUARDANDO,
+  STATUS_CAMINHO_P1,
+  STATUS_COLETADO_P1,
+  STATUS_CAMINHO_PONTO_ADICIONAL,
+  STATUS_PONTOS_ADICIONAIS,
+  STATUS_CAMINHO_DESTINO,
+  STATUS_CHEGADA_DESTINO,
+  STATUS_RETORNANDO,
+  STATUS_CONCLUIDO,
+  STATUS_CANCELADA,
+  statusFiltroFrete,
+  router,
+  route,
+  paginaPorRota,
+  rotaPorPagina,
+  carregando,
+  erro,
+  aba,
+  cadastroAtivo,
+  motoristaAberto,
+  motoristas,
+  motoristasAlocacao,
+  veiculos,
+  empresas,
+  fornecedores,
+  prestadoresServicos,
+  fretes,
+  filtroDataInicioFretes,
+  filtroDataFimFretes,
+  filtroStatus,
+  filtroClienteFretes,
+  filtroPendenciasAntigas,
+  filtroConcluidos,
+  filtroClienteConcluidos,
+  dataInicioConcluidos,
+  dataFimConcluidos,
+  buscaOrigemFrete,
+  buscaEmpresaColeta,
+  buscaDestinoFrete,
+  buscaMotoristasCadastro,
+  buscaVeiculosCadastro,
+  buscaEmpresasCadastro,
+  toast,
+  freteArrastandoId,
+  statusDestinoAtivo,
+  freteAbertoId,
+  menuStatusFrete,
+  filtroSituacaoVeiculo,
+  filtroTipoVeiculo,
+  veiculoIndisponibilidadeAberto,
+  motivoIndisponibilidadeVeiculo,
+  motoristaEditandoId,
+  veiculoEditandoId,
+  empresaEditandoId,
+  fornecedorEditandoId,
+  prestadorEditandoId,
+  freteEditandoId,
+  abaRetornoEdicaoFrete,
+  sidebarRecolhida,
+  menuMobileAberto,
+  avisoPendenciasMostrado,
+  checklistToken,
+  modoChecklist,
+  checklistCarregando,
+  checklistSalvando,
+  checklistErro,
+  checklistSucesso,
+  checklistPublico,
+  checklistResposta,
+  itensChecklistCaminhao,
+  novoMotorista,
+  novoVeiculo,
+  novaEmpresa,
+  novoFornecedor,
+  tiposPrestadorServico,
+  novoPrestadorServico,
+  criarFormularioFreteVazio,
+  novoFrete,
+  paginas,
+  paginaAtual,
+  navegarParaPagina,
+  selecionarCadastroAtivo,
+  sincronizarRotaComEstado,
+  abrirPagina,
+  carregarTudo,
+  statusEhConcluido,
+  statusEhPontoAdicional,
+  statusConfereFiltroFrete,
+  freteEhRetorno,
+  dataLocal,
+  hojeLocal,
+  diasAbertoFrete,
+  freteEstaAtrasado,
+  textoAtrasoFrete,
+  dataConferePeriodoFretes,
+  fretesFiltrados,
+  fretesAtrasados,
+  maiorAtrasoDias,
+  ativarFiltroPendenciasAntigas,
+  limparFiltroPendenciasAntigas,
+  statusVisualFrete,
+  classeStatusVisualFrete,
+  totais,
+  fretesEmAberto,
+  fretesAbertosPorVeiculo,
+  fretesAbertosPorMotorista,
+  situacaoVeiculo,
+  classeSituacaoVeiculo,
+  fretesUsoVeiculo,
+  situacaoMotorista,
+  classeSituacaoMotorista,
+  fretesUsoMotorista,
+  veiculosFiltrados,
+  totaisVeiculos,
+  fretesPorData,
+  empresasColetaDisponiveis,
+  buscarEmpresasPorTermo,
+  empresasOrigemDisponiveis,
+  empresasDestinoDisponiveis,
+  fretesConcluidos,
+  fretesConcluidosFiltrados,
+  totalConcluido,
+  pontosAdicionaisFrete,
+  historicoFretesMotorista,
+  empresasPorNome,
+  empresasClientes,
+  normalizarTextoBusca,
+  motoristasCadastroFiltrados,
+  veiculosCadastroFiltrados,
+  empresasCadastroFiltradas,
+  nomeMotorista,
+  telefoneMotorista,
+  placaVeiculo,
+  veiculoPorId,
+  pontosColetaFrete,
+  statusDisponiveisFrete,
+  colunasKanban,
+  fretesPorStatusKanban,
+  freteDetalhe,
+  rotuloStatusFrete,
+  classeStatusKanban,
+  subtituloStatusKanban,
+  abrirFreteDetalhe,
+  fecharFreteDetalhe,
+  rotaCompactaFrete,
+  horarioFrete,
+  abrirMenuStatusFrete,
+  fecharMenuStatusFrete,
+  moverFreteParaStatus,
+  resumoStatusEdscha,
+  linhaAtualizacaoEdscha,
+  gerarAtualizacaoEdscha,
+  copiarAtualizacaoEdscha,
+  normalizarAlocacao,
+  apenasDigitos,
+  formatarCpf,
+  limparRg,
+  formatarRg,
+  cpfValido,
+  rgValido,
+  aplicarMascaraCpfMotorista,
+  aplicarMascaraRgMotorista,
+  mostrarToast,
+  salvarComFeedback,
+  limparMotorista,
+  limparVeiculo,
+  limparEmpresa,
+  limparFornecedor,
+  limparPrestadorServico,
+  limparFormularioFrete,
+  abrirNovoFrete,
+  cancelarEdicaoFrete,
+  editarFrete,
+  editarMotorista,
+  editarVeiculo,
+  editarEmpresa,
+  editarFornecedor,
+  editarPrestadorServico,
+  cadastrarMotorista,
+  cadastrarVeiculo,
+  cadastrarEmpresa,
+  cadastrarFornecedor,
+  cadastrarPrestadorServico,
+  buscarCepEmpresa,
+  buscarCepFornecedor,
+  buscarCepPrestadorServico,
+  payloadFormularioFrete,
+  cadastrarFrete,
+  adicionarEmpresaColeta,
+  selecionarOrigemFrete,
+  selecionarDestinoFrete,
+  limparOrigemFrete,
+  limparDestinoFrete,
+  removerEmpresaColeta,
+  salvarAlocacao,
+  salvarEscalaAutomaticamente,
+  iniciarArrastoFrete,
+  encerrarArrastoFrete,
+  soltarFreteEmStatus,
+  valorFretePayload,
+  salvarValorFrete,
+  salvarValoresConcluidosFiltrados,
+  salvarDocumentosFrete,
+  salvarNotaFiscalFrete,
+  valorPreenchido,
+  textoPreenchido,
+  salvarValorPreenchidoFrete,
+  salvarDocumentoPreenchidoFrete,
+  salvarFechamentoFrete,
+  excluirFrete,
+  excluirMotorista,
+  excluirVeiculo,
+  abrirIndisponibilidadeVeiculo,
+  fecharIndisponibilidadeVeiculo,
+  confirmarIndisponibilidadeVeiculo,
+  liberarVeiculo,
+  salvarObservacaoEstadoVeiculo,
+  excluirEmpresa,
+  excluirFornecedor,
+  excluirPrestadorServico,
+  checklistTemApontamento,
+  checklistCompleto,
+  checklistRespostaTemApontamento,
+  checklistPublicoTemApontamento,
+  carregarChecklistPublico,
+  confirmarChecklistPublico,
+  linkChecklistFrete,
+  checklistStatusFrete,
+  classeChecklistFrete,
+  dataHoraChecklistFrete,
+  checklistCaminhaoMensagem,
+  mensagemWhatsApp,
+  abrirWhatsApp,
+  copiarMensagem,
+  formatarData,
+  formatarMoeda,
+  periodoExportacaoConcluidos,
+  exportarConcluidos,
+  exportarHistoricoMotoristas,
+  excluirConcluidosFiltrados,
+  enderecoEmpresa,
+  empresaPorNome,
+  enderecoPorNomeEmpresa,
+  pontosMensagemFrete,
+  logoAcelera,
+})
 
-  carregarTudo()
+watch(checklistToken, (token) => {
+  checklistErro.value = ''
+  checklistSucesso.value = ''
+  checklistPublico.value = null
+  checklistResposta.value = respostaChecklistVazia()
+
+  if (!token) return
+  carregarChecklistPublico()
+}, { immediate: true })
+
+watch(() => [route.path, route.query.cadastro, modoChecklist.value], sincronizarRotaComEstado, { immediate: true })
+
+watch(modoChecklist, (emChecklist, estavaEmChecklist) => {
+  if (!emChecklist && estavaEmChecklist) {
+    carregarTudo()
+  }
+})
+
+onMounted(() => {
+  if (!modoChecklist.value) carregarTudo()
 })
 </script>
 
 <template>
   <main v-if="modoChecklist" class="checklist-public">
-    <section class="checklist-panel">
-      <div class="checklist-brand">
-        <img :src="logoAcelera" alt="Acelera Transportes" />
-        <div>
-          <p>Acelera Transportes</p>
-          <h1>Checklist caminhao e placa</h1>
-        </div>
-      </div>
-
-      <p v-if="checklistCarregando" class="checklist-muted">Carregando checklist...</p>
-      <p v-if="checklistErro" class="checklist-alert">{{ checklistErro }}</p>
-      <p v-if="checklistSucesso" class="checklist-success">{{ checklistSucesso }}</p>
-
-      <div v-if="checklistPublico" class="checklist-card">
-        <div class="checklist-trip">
-          <strong>{{ checklistPublico.caminhao }} - {{ checklistPublico.placa }}</strong>
-          <span
-            class="checklist-status"
-            :class="checklistPublico.confirmado ? (checklistPublicoTemApontamento ? 'issue' : 'confirmed') : 'pending'"
-          >
-            {{ checklistPublico.confirmado ? (checklistPublicoTemApontamento ? 'Checklist com apontamento' : 'Checklist confirmado') : 'Checklist pendente' }}
-          </span>
-          <span>{{ checklistPublico.motorista }}</span>
-          <small>{{ formatarData(checklistPublico.data_coleta) }} - {{ String(checklistPublico.horario_coleta).slice(0, 5) }}</small>
-          <small>{{ checklistPublico.origem }} -> {{ checklistPublico.destino }}</small>
-        </div>
-
-        <div class="checklist-options">
-          <div
-            v-for="item in itensChecklistCaminhao"
-            :key="item.chave"
-            class="checklist-option"
-            :class="{ checked: checklistResposta[item.chave] === true, issue: checklistResposta[item.chave] === false }"
-          >
-            <strong>{{ item.rotulo }}</strong>
-            <div class="checklist-choices">
-              <label class="checklist-choice ok" :class="{ selected: checklistResposta[item.chave] === true }">
-                <input v-model="checklistResposta[item.chave]" type="radio" :name="item.chave" :value="true" :disabled="checklistPublico.confirmado" />
-                OK
-              </label>
-              <label class="checklist-choice issue" :class="{ selected: checklistResposta[item.chave] === false }">
-                <input v-model="checklistResposta[item.chave]" type="radio" :name="item.chave" :value="false" :disabled="checklistPublico.confirmado" />
-                Problema
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <label v-if="checklistRespostaTemApontamento || checklistPublico.observacoes" class="field checklist-notes">
-          Observacao do apontamento
-          <textarea
-            v-model="checklistResposta.observacoes"
-            rows="3"
-            :disabled="checklistPublico.confirmado"
-            placeholder="Descreva o que nao esta ok"
-          ></textarea>
-        </label>
-
-        <button
-          type="button"
-          :disabled="checklistSalvando || checklistPublico.confirmado"
-          @click="confirmarChecklistPublico"
-        >
-          {{ checklistPublico.confirmado ? 'Checklist confirmado' : checklistSalvando ? 'Confirmando...' : 'Confirmar checklist' }}
-        </button>
-      </div>
-    </section>
+    <ChecklistPublicView :state="viewState" />
   </main>
 
   <main v-else class="app-shell" :class="{ 'sidebar-collapsed': sidebarRecolhida }">
@@ -1530,18 +2149,18 @@ onMounted(() => {
         </button>
       </div>
 
-      <nav class="sidebar-nav" aria-label="Navegacao principal">
+      <nav class="sidebar-nav" aria-label="Navegação principal">
         <button title="Fretes" :class="{ active: aba === 'fretes' }" type="button" @click="abrirPagina('fretes')">
           <span class="nav-icon"><img :src="iconFretes" alt="" /></span>
           <span><strong>Fretes</strong><small>FRETES</small></span>
         </button>
-        <button title="Concluidos" :class="{ active: aba === 'concluidos' }" type="button" @click="abrirPagina('concluidos')">
+        <button title="Concluídos" :class="{ active: aba === 'concluidos' }" type="button" @click="abrirPagina('concluidos')">
           <span class="nav-icon"><img :src="iconConcluidos" alt="" /></span>
-          <span><strong>Concluidos</strong><small>CONCLUIDOS</small></span>
+          <span><strong>Concluídos</strong><small>CONCLUÍDOS</small></span>
         </button>
-        <button title="Caminhoes" :class="{ active: aba === 'caminhoes' }" type="button" @click="abrirPagina('caminhoes')">
+        <button title="Caminhões" :class="{ active: aba === 'caminhoes' }" type="button" @click="abrirPagina('caminhoes')">
           <span class="nav-icon"><img :src="iconCaminhao" alt="" /></span>
-          <span><strong>Caminhoes</strong><small>CAMINHAO</small></span>
+          <span><strong>Caminhões</strong><small>CAMINHÃO</small></span>
         </button>
         <button title="Motoristas" :class="{ active: aba === 'relatorios' }" type="button" @click="abrirPagina('relatorios')">
           <span class="nav-icon"><img :src="iconMotorista" alt="" /></span>
@@ -1554,6 +2173,14 @@ onMounted(() => {
         <button title="Cadastros" :class="{ active: aba === 'cadastros' }" type="button" @click="abrirPagina('cadastros', 'motoristas')">
           <span class="nav-icon"><img :src="iconCadastro" alt="" /></span>
           <span><strong>Cadastros</strong><small>CADASTRO</small></span>
+        </button>
+        <button title="Fornecedores" :class="{ active: aba === 'fornecedores' }" type="button" @click="abrirPagina('fornecedores')">
+          <span class="nav-icon"><img :src="iconFornecedores" alt="" /></span>
+          <span><strong>Fornecedores</strong><small>FORNECEDOR</small></span>
+        </button>
+        <button title="Prestadores" :class="{ active: aba === 'prestadores-servicos' }" type="button" @click="abrirPagina('prestadores-servicos')">
+          <span class="nav-icon"><img :src="iconPrestadores" alt="" /></span>
+          <span><strong>Prestadores</strong><small>SERVIÇOS</small></span>
         </button>
       </nav>
 
@@ -1586,925 +2213,9 @@ onMounted(() => {
 
       <section v-if="erro" class="alert">{{ erro }}</section>
 
-    <div v-if="false" class="nav-groups">
-      <nav class="tabs" aria-label="Visualizacao e operacao">
-        <button :class="{ active: aba === 'fretes' }" type="button" @click="aba = 'fretes'">Fretes</button>
-        <button :class="{ active: aba === 'concluidos' }" type="button" @click="aba = 'concluidos'">Concluidos</button>
-        <button :class="{ active: aba === 'caminhoes' }" type="button" @click="aba = 'caminhoes'">Caminhões</button>
-        <button :class="{ active: aba === 'relatorios' }" type="button" @click="aba = 'relatorios'">Motoristas</button>
-      </nav>
-
-      <nav class="tabs create-tabs" aria-label="Criacao e cadastros">
-        <button :class="{ active: aba === 'novo-frete' }" type="button" @click="aba = 'novo-frete'">Novo frete</button>
-        <button :class="{ active: aba === 'cadastros' }" type="button" @click="aba = 'cadastros'; cadastroAtivo = 'motoristas'">Cadastros</button>
-      </nav>
-    </div>
-
-    <section v-if="aba === 'fretes'" class="workspace">
-      <div class="section-head freight-toolbar">
-        <div>
-          <h2>Escala diaria</h2>
-          <p>Fretes cadastrados, alocacao e status da viagem.</p>
-        </div>
-        <div class="freight-toolbar-controls">
-          <button class="update-button" type="button" @click="copiarAtualizacaoEdscha">
-            Copiar atualizacao Edscha
-          </button>
-          <div class="freight-quick-filters">
-            <button
-              class="secondary overdue-filter-button"
-              :class="{ active: filtroPendenciasAntigas }"
-              type="button"
-              @click="filtroPendenciasAntigas ? limparFiltroPendenciasAntigas() : ativarFiltroPendenciasAntigas()"
-            >
-              Pendentes antigos
-              <span v-if="fretesAtrasados.length > 0">{{ fretesAtrasados.length }}</span>
-            </button>
-          </div>
-          <div class="freight-filters">
-            <label class="field compact">
-              Data inicio
-              <input v-model="filtroDataInicioFretes" type="date" />
-            </label>
-            <label class="field compact">
-              Data fim
-              <input v-model="filtroDataFimFretes" type="date" />
-            </label>
-            <label class="field compact">
-              Cliente
-              <select v-model="filtroClienteFretes">
-                <option value="Todos">Todos</option>
-                <option v-for="empresa in empresasClientes" :key="empresa.id" :value="empresa.nome">{{ empresa.nome }}</option>
-              </select>
-            </label>
-            <label class="field compact">
-              Status
-              <select v-model="filtroStatus">
-                <option value="Todos">Todos</option>
-                <option v-for="status in statusFiltroFrete" :key="status" :value="status">{{ rotuloStatusFrete(status) }}</option>
-              </select>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <section v-if="fretesAtrasados.length > 0" class="overdue-alert">
-        <div class="overdue-alert-main">
-          <span class="overdue-alert-count">{{ fretesAtrasados.length }}</span>
-          <div>
-            <strong>{{ fretesAtrasados.length === 1 ? '1 frete antigo em aberto' : `${fretesAtrasados.length} fretes antigos em aberto` }}</strong>
-            <p>Mais antigo: {{ maiorAtrasoDias === 1 ? '1 dia' : `${maiorAtrasoDias} dias` }}. Revise antes de seguir a escala do dia.</p>
-          </div>
-        </div>
-        <div class="overdue-alert-actions">
-          <button type="button" @click="ativarFiltroPendenciasAntigas">Ver pendencias</button>
-          <button v-if="filtroPendenciasAntigas" class="secondary" type="button" @click="limparFiltroPendenciasAntigas">Voltar para filtros</button>
-        </div>
-      </section>
-
-      <div class="metrics">
-        <div><strong>{{ totais.aguardando }}</strong><span>Aguardando horário</span></div>
-        <div><strong>{{ totais.andamento }}</strong><span>Em andamento</span></div>
-        <div><strong>{{ totais.concluidas }}</strong><span>Concluidas</span></div>
-        <div><strong>{{ totais.retorno }}</strong><span>Com retorno</span></div>
-      </div>
-
-      <section v-if="fretesAtrasados.length > 0" class="overdue-panel">
-        <div class="overdue-panel-head">
-          <div>
-            <h3>Pendencias antigas</h3>
-            <p>Fretes abertos com data anterior a hoje.</p>
-          </div>
-          <button class="secondary" type="button" @click="ativarFiltroPendenciasAntigas">Filtrar no Kanban</button>
-        </div>
-        <div class="overdue-list">
-          <article v-for="frete in fretesAtrasados" :key="frete.id" class="overdue-row">
-            <div class="overdue-row-main">
-              <strong>{{ formatarData(frete.data_coleta) }} - {{ horarioFrete(frete) }}</strong>
-              <span>{{ rotaCompactaFrete(frete) }}</span>
-              <small>{{ nomeMotorista(frete.motorista_id) }} | {{ placaVeiculo(frete.veiculo_id) }} | {{ rotuloStatusFrete(frete.status) }}</small>
-            </div>
-            <span class="overdue-days">{{ textoAtrasoFrete(frete) }}</span>
-            <div class="overdue-row-actions">
-              <button class="secondary compact-button" type="button" @click="abrirMenuStatusFrete($event, frete)">Mover status</button>
-              <button class="secondary compact-button" type="button" @click="editarFrete(frete)">Editar</button>
-              <button class="secondary compact-button" type="button" @click="abrirWhatsApp(frete)">WhatsApp</button>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <div class="kanban-board">
-        <section
-          v-for="status in colunasKanban"
-          :key="status"
-          class="kanban-column"
-          :class="[classeStatusKanban(status), { 'drop-active': statusDestinoAtivo === status }]"
-          @dragover.prevent
-          @dragenter.prevent="statusDestinoAtivo = status"
-          @drop="soltarFreteEmStatus($event, status)"
-        >
-          <header class="kanban-column-head">
-            <div>
-              <h3>{{ rotuloStatusFrete(status) }}</h3>
-              <p>{{ subtituloStatusKanban(status) }}</p>
-            </div>
-            <span>{{ fretesPorStatusKanban(status).length }}</span>
-          </header>
-
-          <div class="kanban-cards">
-            <article
-              v-for="frete in fretesPorStatusKanban(status)"
-              :key="frete.id"
-              class="freight-card kanban-card"
-              :class="{ dragging: freteArrastandoId === frete.id, expanded: freteAbertoId === frete.id, overdue: freteEstaAtrasado(frete) }"
-              draggable="true"
-              role="button"
-              tabindex="0"
-              @dragstart="iniciarArrastoFrete($event, frete)"
-              @dragend="encerrarArrastoFrete"
-              @click="abrirFreteDetalhe(frete.id)"
-              @contextmenu.prevent.stop="abrirMenuStatusFrete($event, frete)"
-              @keydown.enter.prevent="abrirFreteDetalhe(frete.id)"
-              @keydown.space.prevent="abrirFreteDetalhe(frete.id)"
-            >
-              <div class="kanban-card-summary">
-                <div class="kanban-time-block">
-                  <span class="time">{{ horarioFrete(frete) }}</span>
-                  <span class="badge" :class="classeStatusVisualFrete(frete.status)">{{ statusVisualFrete(frete.status) }}</span>
-                </div>
-
-                <p class="kanban-route">{{ rotaCompactaFrete(frete) }}</p>
-
-                <div class="kanban-mini-details">
-                  <span>{{ frete.tipo_caminhao_necessario }}</span>
-                  <span>{{ placaVeiculo(frete.veiculo_id) }}</span>
-                  <span class="checklist-chip" :class="classeChecklistFrete(frete)">{{ checklistStatusFrete(frete) }}</span>
-                  <span v-if="freteEstaAtrasado(frete)" class="overdue-chip">{{ textoAtrasoFrete(frete) }}</span>
-                  <span v-if="frete.retorno">Gera retorno</span>
-                </div>
-              </div>
-
-              <div v-if="false" class="kanban-card-expanded" @click.stop>
-
-                <div v-if="frete.checklist_observacoes" class="note">Checklist: {{ frete.checklist_observacoes }}</div>
-
-                <div v-if="frete.observacoes" class="note">{{ frete.observacoes }}</div>
-
-                <div class="allocation-grid">
-                  <label class="field">
-                    Motorista
-                    <select v-model="frete.motorista_id" @change="salvarEscalaAutomaticamente(frete)">
-                      <option :value="null">Selecionar</option>
-                      <option v-for="motorista in motoristas" :key="motorista.id" :value="motorista.id">{{ motorista.nome }}</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    Caminhão
-                    <select v-model="frete.veiculo_id" @change="salvarEscalaAutomaticamente(frete)">
-                      <option :value="null">Selecionar</option>
-                      <option v-for="veiculo in veiculos" :key="veiculo.id" :value="veiculo.id">{{ veiculo.placa }} - {{ veiculo.tipo }}</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    Valor do servico
-                    <input v-model="frete.valor_servico" type="number" min="0" step="0.01" placeholder="Opcional" />
-                  </label>
-                  <label class="field">
-                    Nota fiscal
-                    <input v-model="frete.nota_fiscal" placeholder="Opcional" />
-                  </label>
-                </div>
-
-                <div class="actions">
-                  <button class="secondary status-move-button" type="button" @click="abrirMenuStatusFrete($event, frete)">Mover status</button>
-                  <button class="secondary" type="button" @click="salvarValorFrete(frete)">Salvar valor</button>
-                  <button class="secondary" type="button" @click="salvarNotaFiscalFrete(frete)">Salvar NF</button>
-                  <button class="secondary" type="button" @click="editarFrete(frete)">Editar frete</button>
-                  <button class="secondary" type="button" @click="copiarMensagem(frete)">Copiar mensagem</button>
-                  <button class="secondary" type="button" @click="abrirWhatsApp(frete)">WhatsApp</button>
-                  <button class="danger" type="button" @click="excluirFrete(frete.id)">Excluir</button>
-                </div>
-              </div>
-            </article>
-
-            <p v-if="fretesPorStatusKanban(status).length === 0" class="kanban-empty">Solte fretes aqui</p>
-          </div>
-        </section>
-
-        <p v-if="!carregando && fretesFiltrados.length === 0" class="empty">
-          {{ filtroPendenciasAntigas ? 'Nenhuma pendencia antiga encontrada.' : 'Nenhum frete cadastrado para esta data.' }}
-        </p>
-      </div>
-
-      <div v-if="freteDetalhe" class="freight-detail-backdrop" @click="fecharFreteDetalhe">
-        <section class="freight-detail-modal" role="dialog" aria-modal="true" @click.stop>
-          <header class="freight-detail-header">
-            <div>
-              <div class="freight-detail-kickers">
-                <span class="freight-detail-label">{{ rotuloStatusFrete(freteDetalhe.status) }}</span>
-                <span class="checklist-chip" :class="classeChecklistFrete(freteDetalhe)">{{ checklistStatusFrete(freteDetalhe) }}</span>
-              </div>
-              <h2>{{ horarioFrete(freteDetalhe) }} - {{ freteDetalhe.origem }} para {{ freteDetalhe.destino }}</h2>
-              <p>{{ nomeMotorista(freteDetalhe.motorista_id) }} | {{ placaVeiculo(freteDetalhe.veiculo_id) }}</p>
-            </div>
-            <button class="icon-button" type="button" aria-label="Fechar detalhes" @click="fecharFreteDetalhe">x</button>
-          </header>
-
-          <div class="freight-detail-body">
-            <section class="freight-detail-main">
-              <div class="freight-detail-overview">
-                <div>
-                  <small>Veiculo</small>
-                  <strong>{{ freteDetalhe.tipo_caminhao_necessario }}</strong>
-                </div>
-                <div>
-                  <small>Nota fiscal</small>
-                  <strong>{{ freteDetalhe.nota_fiscal || 'Sem nota' }}</strong>
-                </div>
-                <div>
-                  <small>Valor</small>
-                  <strong>{{ formatarMoeda(freteDetalhe.valor_servico) }}</strong>
-                </div>
-                <div>
-                  <small>Retorno</small>
-                  <strong>{{ freteDetalhe.retorno ? 'Sim' : 'Nao' }}</strong>
-                </div>
-              </div>
-
-              <div class="freight-detail-section">
-                <h3>Rota</h3>
-                <div class="freight-route-steps">
-                  <div v-for="(ponto, index) in pontosMensagemFrete(freteDetalhe)" :key="`${ponto}-${index}`" class="freight-route-step">
-                    <span>{{ index + 1 }}</span>
-                    <strong>{{ ponto }}</strong>
-                  </div>
-                </div>
-              </div>
-
-              <div class="freight-detail-section">
-                <h3>Checklist</h3>
-                <div class="freight-checklist-summary">
-                  <span class="checklist-chip" :class="classeChecklistFrete(freteDetalhe)">
-                    {{ freteDetalhe.checklist_confirmado ? `${checklistStatusFrete(freteDetalhe)} ${dataHoraChecklistFrete(freteDetalhe)}` : 'Checklist pendente' }}
-                  </span>
-                  <p v-if="freteDetalhe.checklist_observacoes">{{ freteDetalhe.checklist_observacoes }}</p>
-                </div>
-              </div>
-
-              <p v-if="freteDetalhe.observacoes" class="freight-detail-note">{{ freteDetalhe.observacoes }}</p>
-            </section>
-
-            <aside class="freight-detail-side">
-              <div class="freight-detail-panel">
-                <div class="modal-allocation-grid">
-                  <label class="field">
-                    Motorista
-                    <select v-model="freteDetalhe.motorista_id" @change="salvarEscalaAutomaticamente(freteDetalhe)">
-                      <option :value="null">Selecionar</option>
-                      <option v-for="motorista in motoristas" :key="motorista.id" :value="motorista.id">{{ motorista.nome }}</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    Caminhao
-                    <select v-model="freteDetalhe.veiculo_id" @change="salvarEscalaAutomaticamente(freteDetalhe)">
-                      <option :value="null">Selecionar</option>
-                      <option v-for="veiculo in veiculos" :key="veiculo.id" :value="veiculo.id">{{ veiculo.placa }} - {{ veiculo.tipo }}</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    Valor do servico
-                    <input v-model="freteDetalhe.valor_servico" type="number" min="0" step="0.01" placeholder="Opcional" @change="salvarValorFrete(freteDetalhe)" />
-                  </label>
-                  <label class="field">
-                    Nota fiscal
-                    <input v-model="freteDetalhe.nota_fiscal" placeholder="Opcional" @change="salvarNotaFiscalFrete(freteDetalhe)" />
-                  </label>
-                </div>
-              </div>
-
-              <div class="actions freight-detail-actions">
-                <button class="secondary status-move-button" type="button" @click="abrirMenuStatusFrete($event, freteDetalhe)">Mover status</button>
-                <button class="secondary" type="button" @click="editarFrete(freteDetalhe)">Editar frete</button>
-                <button class="secondary" type="button" @click="copiarMensagem(freteDetalhe)">Copiar mensagem</button>
-                <button class="secondary" type="button" @click="abrirWhatsApp(freteDetalhe)">WhatsApp</button>
-                <button class="danger" type="button" @click="excluirFrete(freteDetalhe.id)">Excluir</button>
-              </div>
-            </aside>
-          </div>
-        </section>
-      </div>
-
-      <div v-if="menuStatusFrete.aberto" class="kanban-context-backdrop" @click="fecharMenuStatusFrete" @contextmenu.prevent="fecharMenuStatusFrete">
-        <div
-          class="kanban-context-menu"
-          :style="{ left: `${menuStatusFrete.x}px`, top: `${menuStatusFrete.y}px` }"
-          @click.stop
-        >
-          <div class="kanban-context-head">
-            <strong>Mover para</strong>
-            <span>{{ menuStatusFrete.frete?.origem }} -> {{ menuStatusFrete.frete?.destino }}</span>
-          </div>
-          <button
-            v-for="status in statusDisponiveisFrete(menuStatusFrete.frete)"
-            :key="status"
-            type="button"
-            :class="{ active: menuStatusFrete.frete?.status === status || (status === STATUS_CONCLUIDO && statusEhConcluido(menuStatusFrete.frete?.status)) }"
-            @click="moverFreteParaStatus(menuStatusFrete.frete, status)"
-          >
-            {{ rotuloStatusFrete(status) }}
-          </button>
-        </div>
-      </div>
-
-      <div v-if="false" class="freight-list">
-        <article v-for="frete in fretesFiltrados" :key="frete.id" class="freight-card">
-          <div class="freight-main">
-            <div>
-              <p class="time">{{ frete.horario_coleta.slice(0, 5) }}</p>
-              <h3>{{ frete.origem }} → {{ frete.destino }}</h3>
-              <p class="muted">{{ frete.empresas_coleta || 'Sem pontos intermediarios' }}</p>
-            </div>
-            <span class="badge" :class="classeStatusVisualFrete(frete.status)">{{ statusVisualFrete(frete.status) }}</span>
-          </div>
-
-          <div class="freight-details">
-            <span>{{ frete.tipo_caminhao_necessario }}</span>
-            <span>Retorno: {{ frete.retorno ? 'Sim' : 'Nao' }}</span>
-            <span>{{ nomeMotorista(frete.motorista_id) }}</span>
-            <span>{{ placaVeiculo(frete.veiculo_id) }}</span>
-            <span class="checklist-chip" :class="classeChecklistFrete(frete)">{{ checklistStatusFrete(frete) }}</span>
-            <span>Valor: {{ formatarMoeda(frete.valor_servico) }}</span>
-            <span>NF: {{ frete.nota_fiscal || 'Sem nota' }}</span>
-          </div>
-
-          <div v-if="frete.observacoes" class="note">{{ frete.observacoes }}</div>
-
-          <div class="allocation-grid">
-            <label class="field">
-              Motorista
-              <select v-model="frete.motorista_id" @change="salvarEscalaAutomaticamente(frete)">
-                <option :value="null">Selecionar</option>
-                <option v-for="motorista in motoristas" :key="motorista.id" :value="motorista.id">{{ motorista.nome }}</option>
-              </select>
-            </label>
-            <label class="field">
-              Caminhao
-              <select v-model="frete.veiculo_id" @change="salvarEscalaAutomaticamente(frete)">
-                <option :value="null">Selecionar</option>
-                <option v-for="veiculo in veiculos" :key="veiculo.id" :value="veiculo.id">{{ veiculo.placa }} - {{ veiculo.tipo }}</option>
-              </select>
-            </label>
-            <label class="field">
-              Status
-              <select v-model="frete.status" @change="salvarEscalaAutomaticamente(frete)">
-                <option v-for="status in statusDisponiveisFrete(frete)" :key="status" :value="status">{{ status }}</option>
-              </select>
-            </label>
-            <label class="field">
-              Valor do servico
-              <input v-model="frete.valor_servico" type="number" min="0" step="0.01" placeholder="Opcional" />
-            </label>
-            <label class="field">
-              Nota fiscal
-              <input v-model="frete.nota_fiscal" placeholder="Opcional" />
-            </label>
-          </div>
-
-          <div class="actions">
-            <button class="secondary" type="button" @click="salvarValorFrete(frete)">Salvar valor</button>
-            <button class="secondary" type="button" @click="salvarNotaFiscalFrete(frete)">Salvar NF</button>
-            <button class="secondary" type="button" @click="copiarMensagem(frete)">Copiar mensagem</button>
-            <button class="secondary" type="button" @click="abrirWhatsApp(frete)">WhatsApp</button>
-            <button class="danger" type="button" @click="excluirFrete(frete.id)">Excluir</button>
-          </div>
-        </article>
-
-        <p v-if="!carregando && fretesFiltrados.length === 0" class="empty">Nenhum frete cadastrado para esta data.</p>
-      </div>
-    </section>
-
-    <section v-if="aba === 'concluidos'" class="workspace">
-      <div class="section-head">
-        <div>
-          <h2>Fretes concluidos</h2>
-          <p>Fechamento financeiro dos servicos já realizados.</p>
-        </div>
-      </div>
-
-      <div class="period-filter">
-        <label class="field">
-          Periodo
-          <select v-model="filtroConcluidos">
-            <option value="todos">Todos</option>
-            <option value="hoje">Hoje</option>
-            <option value="semana">Esta semana</option>
-            <option value="mes">Este mes</option>
-            <option value="periodo">Periodo personalizado</option>
-          </select>
-        </label>
-        <label class="field">
-          Cliente
-          <select v-model="filtroClienteConcluidos">
-            <option value="Todos">Todos</option>
-            <option v-for="empresa in empresasClientes" :key="empresa.id" :value="empresa.nome">{{ empresa.nome }}</option>
-          </select>
-        </label>
-        <label class="field" :class="{ disabled: filtroConcluidos !== 'periodo' }">
-          Inicio
-          <input v-model="dataInicioConcluidos" type="date" :disabled="filtroConcluidos !== 'periodo'" />
-        </label>
-        <label class="field" :class="{ disabled: filtroConcluidos !== 'periodo' }">
-          Fim
-          <input v-model="dataFimConcluidos" type="date" :disabled="filtroConcluidos !== 'periodo'" />
-        </label>
-        <button type="button" @click="exportarConcluidos">Exportar Excel</button>
-        <button class="danger" type="button" @click="excluirConcluidosFiltrados">Excluir filtrados</button>
-      </div>
-
-      <div class="metrics concluded-metrics">
-        <div><strong>{{ fretesConcluidosFiltrados.length }}</strong><span>Fretes concluidos</span></div>
-        <div><strong>{{ formatarMoeda(totalConcluido) }}</strong><span>Total informado</span></div>
-      </div>
-
-      <div class="concluded-bulk-actions">
-        <button type="button" @click="salvarValoresConcluidosFiltrados">Salvar valores preenchidos</button>
-      </div>
-
-      <div class="freight-list">
-        <article v-for="frete in fretesConcluidosFiltrados" :key="frete.id" class="freight-card concluded-card">
-          <div class="freight-main">
-            <div>
-              <p class="time">{{ formatarData(frete.data_coleta) }} - {{ frete.horario_coleta.slice(0, 5) }}</p>
-              <h3>{{ frete.origem }} → {{ frete.destino }}</h3>
-              <p class="muted">{{ nomeMotorista(frete.motorista_id) }} • {{ placaVeiculo(frete.veiculo_id) }} • NF: {{ frete.nota_fiscal || 'Sem nota' }}</p>
-            </div>
-            <span class="badge concluida">concluido</span>
-          </div>
-
-          <div class="billing-grid">
-            <label class="field billing-field">
-              Nota fiscal
-              <input
-                v-model="frete.nota_fiscal"
-                placeholder="Numero da nota fiscal"
-                @change="salvarDocumentoPreenchidoFrete(frete, 'nota_fiscal')"
-              />
-            </label>
-            <label class="field billing-field">
-              OC
-              <input v-model="frete.oc" placeholder="Numero da OC" @change="salvarDocumentoPreenchidoFrete(frete, 'oc')" />
-            </label>
-            <label class="field billing-field">
-              Valor do servico
-              <input
-                v-model="frete.valor_servico"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0,00"
-                @change="salvarValorPreenchidoFrete(frete, 'valor_servico')"
-              />
-            </label>
-            <label v-if="frete.retorno" class="field billing-field">
-              Valor do retorno
-              <input
-                v-model="frete.valor_retorno"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0,00"
-                @change="salvarValorPreenchidoFrete(frete, 'valor_retorno')"
-              />
-            </label>
-            <label v-if="pontosAdicionaisFrete(frete).length > 0" class="field billing-field">
-              Valor do ponto adicional
-              <input
-                v-model="frete.valor_ponto_adicional"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0,00"
-                @change="salvarValorPreenchidoFrete(frete, 'valor_ponto_adicional')"
-              />
-            </label>
-          </div>
-
-          <div class="concluded-card-footer">
-            <div class="billing-summary">
-              <span>Servico: {{ formatarMoeda(frete.valor_servico) }}</span>
-              <span v-if="frete.retorno">Retorno: {{ formatarMoeda(frete.valor_retorno) }}</span>
-              <span v-if="pontosAdicionaisFrete(frete).length > 0">Ponto: {{ formatarMoeda(frete.valor_ponto_adicional) }}</span>
-            </div>
-            <div class="concluded-card-actions">
-              <button class="secondary" type="button" @click="editarFrete(frete)">Editar frete</button>
-              <button type="button" @click="salvarFechamentoFrete(frete)">Salvar fechamento</button>
-            </div>
-          </div>
-        </article>
-
-        <p v-if="fretesConcluidosFiltrados.length === 0" class="empty">Nenhum frete concluido para este periodo.</p>
-      </div>
-    </section>
-
-    <section v-if="aba === 'caminhoes'" class="workspace">
-      <div class="section-head">
-        <div>
-          <h2>Controle de caminhoes</h2>
-          <p>Disponibilidade da frota e uso em fretes abertos.</p>
-        </div>
-        <label class="field compact">
-          Situacao
-          <select v-model="filtroSituacaoVeiculo">
-            <option value="Todos">Todos</option>
-            <option value="Disponivel">Disponiveis</option>
-            <option value="Em uso">Em uso</option>
-            <option value="Indisponivel">Indisponiveis</option>
-          </select>
-        </label>
-        <label class="field compact">
-          Tipo
-          <select v-model="filtroTipoVeiculo">
-            <option value="Todos">Todos</option>
-            <option v-for="tipo in tiposVeiculo" :key="tipo" :value="tipo">{{ tipo }}</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="metrics fleet-metrics">
-        <div><strong>{{ totaisVeiculos.total }}</strong><span>Cadastrados</span></div>
-        <div><strong>{{ totaisVeiculos.disponiveis }}</strong><span>Disponiveis</span></div>
-        <div><strong>{{ totaisVeiculos.emUso }}</strong><span>Em uso</span></div>
-        <div><strong>{{ totaisVeiculos.indisponiveis }}</strong><span>Indisponiveis</span></div>
-      </div>
-
-      <div class="vehicle-grid">
-        <article v-for="veiculo in veiculosFiltrados" :key="veiculo.id" class="vehicle-card" :class="classeSituacaoVeiculo(veiculo)">
-          <div class="vehicle-card-head">
-            <div>
-              <h3>{{ veiculo.tipo }}</h3>
-              <p>{{ veiculo.placa }}</p>
-              <small v-if="veiculo.observacoes" class="vehicle-feature">{{ veiculo.observacoes }}</small>
-            </div>
-            <span class="vehicle-status">{{ situacaoVeiculo(veiculo) }}</span>
-          </div>
-
-          <div class="vehicle-card-body">
-            <div v-if="fretesUsoVeiculo(veiculo).length > 0" class="vehicle-usage">
-              <strong>Fretes abertos</strong>
-              <div v-for="frete in fretesUsoVeiculo(veiculo)" :key="frete.id" class="vehicle-usage-row">
-                <span>{{ formatarData(frete.data_coleta) }} - {{ horarioFrete(frete) }}</span>
-                <small>{{ frete.cliente }} | {{ frete.origem }} -> {{ frete.destino }}</small>
-                <small>{{ frete.status }}</small>
-              </div>
-            </div>
-            <div v-else class="vehicle-usage-empty">Sem fretes em aberto</div>
-          </div>
-
-          <div v-if="!veiculo.ativo" class="vehicle-unavailable-reason">
-            <strong>Motivo da indisponibilidade</strong>
-            <p>{{ veiculo.motivo_indisponibilidade || 'Sem motivo informado' }}</p>
-          </div>
-
-          <div class="actions vehicle-actions">
-            <button v-if="veiculo.ativo" class="danger" type="button" @click="abrirIndisponibilidadeVeiculo(veiculo)">
-              Marcar indisponivel
-            </button>
-            <button v-else type="button" @click="liberarVeiculo(veiculo)">
-              Liberar para uso
-            </button>
-          </div>
-        </article>
-
-        <p v-if="veiculosFiltrados.length === 0" class="empty">Nenhum caminhão nesta situacao.</p>
-      </div>
-
-      <div v-if="veiculoIndisponibilidadeAberto" class="modal-backdrop" @click.self="fecharIndisponibilidadeVeiculo">
-        <div class="modal-panel">
-          <div>
-            <h3>Indisponibilizar caminhao</h3>
-            <p>{{ veiculoIndisponibilidadeAberto.placa }} - {{ veiculoIndisponibilidadeAberto.tipo }}</p>
-          </div>
-
-          <label class="field">
-            Motivo
-            <textarea v-model="motivoIndisponibilidadeVeiculo" rows="4" placeholder="Ex: conserto, revisao, reservado"></textarea>
-          </label>
-
-          <div class="actions">
-            <button class="secondary" type="button" @click="fecharIndisponibilidadeVeiculo">Cancelar</button>
-            <button class="danger" type="button" @click="confirmarIndisponibilidadeVeiculo">Confirmar</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section v-if="aba === 'novo-frete'" class="workspace">
-      <div class="section-head">
-        <div>
-          <h2>{{ freteEditandoId ? 'Editar frete' : 'Cadastrar frete' }}</h2>
-          <p>{{ freteEditandoId ? 'Ajuste os dados do frete e salve as alteracoes.' : 'Use para fretes recebidos por planilha ou WhatsApp.' }}</p>
-        </div>
-      </div>
-
-      <form class="form-grid freight-create-form" @submit.prevent="cadastrarFrete">
-        <label class="field">
-          Cliente
-          <select v-model="novoFrete.cliente" required>
-            <option value="" disabled></option>
-            <option v-for="empresa in empresasClientes" :key="empresa.id" :value="empresa.nome">{{ empresa.nome }}</option>
-          </select>
-        </label>
-        <label class="field">Data<input v-model="novoFrete.data_coleta" type="date" required /></label>
-        <label class="field">Horário<input v-model="novoFrete.horario_coleta" type="time" required /></label>
-        <label class="field">Nota fiscal<input v-model="novoFrete.nota_fiscal" placeholder="Opcional" /></label>
-        <div class="field company-picker">
-          <span>Origem</span>
-          <input v-model="buscaOrigemFrete" :placeholder="novoFrete.origem || 'Buscar empresa de origem'" />
-          <div v-if="buscaOrigemFrete" class="picker-results">
-            <button v-for="empresa in empresasOrigemDisponiveis" :key="empresa.id" class="picker-option" type="button" @click="selecionarOrigemFrete(empresa)">
-              {{ empresa.nome }}<small>{{ empresa.cnpj || 'CNPJ nao informado' }}</small>
-            </button>
-            <p v-if="empresasOrigemDisponiveis.length === 0">Nenhuma empresa encontrada.</p>
-          </div>
-          <div v-if="novoFrete.origem" class="selected-company">
-            <span>{{ novoFrete.origem }}</span>
-            <button type="button" @click="limparOrigemFrete">Trocar</button>
-          </div>
-          <input v-model="novoFrete.origem" class="hidden-required-input" required tabindex="-1" aria-hidden="true" />
-        </div>
-        <div class="field wide company-picker">
-          <span>Empresas de coleta/passagem</span>
-          <input v-model="buscaEmpresaColeta" placeholder="Buscar empresa para adicionar" />
-          <div v-if="buscaEmpresaColeta" class="picker-results">
-            <button v-for="empresa in empresasColetaDisponiveis" :key="empresa.id" class="picker-option" type="button" @click="adicionarEmpresaColeta(empresa)">
-              {{ empresa.nome }}
-            </button>
-            <p v-if="empresasColetaDisponiveis.length === 0">Nenhuma empresa encontrada.</p>
-          </div>
-          <div class="chips">
-            <button v-for="empresa in novoFrete.empresas_coleta" :key="empresa" type="button" @click="removerEmpresaColeta(empresa)">
-              {{ empresa }} ×
-            </button>
-          </div>
-          <small v-if="empresas.length === 0">Cadastre empresas antes de criar fretes.</small>
-        </div>
-        <div class="field company-picker">
-          <span>Destino</span>
-          <input v-model="buscaDestinoFrete" :placeholder="novoFrete.destino || 'Buscar empresa de destino'" />
-          <div v-if="buscaDestinoFrete" class="picker-results">
-            <button v-for="empresa in empresasDestinoDisponiveis" :key="empresa.id" class="picker-option" type="button" @click="selecionarDestinoFrete(empresa)">
-              {{ empresa.nome }}<small>{{ empresa.cnpj || 'CNPJ nao informado' }}</small>
-            </button>
-            <p v-if="empresasDestinoDisponiveis.length === 0">Nenhuma empresa encontrada.</p>
-          </div>
-          <div v-if="novoFrete.destino" class="selected-company">
-            <span>{{ novoFrete.destino }}</span>
-            <button type="button" @click="limparDestinoFrete">Trocar</button>
-          </div>
-          <input v-model="novoFrete.destino" class="hidden-required-input" required tabindex="-1" aria-hidden="true" />
-        </div>
-        <label class="field">
-          Tipo de veículo requisitado
-          <select v-model="novoFrete.tipo_caminhao_necessario" required>
-            <option v-for="tipo in tiposVeiculo" :key="tipo" :value="tipo">{{ tipo }}</option>
-          </select>
-        </label>
-        <label class="field">Valor do servico<input v-model="novoFrete.valor_servico" type="number" min="0" step="0.01" placeholder="Opcional" /></label>
-        <label class="check-field"><input v-model="novoFrete.retorno" type="checkbox" /> Criar retorno para cobranca</label>
-        <label class="field">Motorista<select v-model="novoFrete.motorista_id" required><option value="" disabled></option><option v-for="motorista in motoristas" :key="motorista.id" :value="motorista.id">{{ motorista.nome }}</option></select></label>
-        <label class="field">Caminhao<select v-model="novoFrete.veiculo_id" required><option value="" disabled></option><option v-for="veiculo in veiculos" :key="veiculo.id" :value="veiculo.id">{{ veiculo.placa }} - {{ veiculo.tipo }}</option></select></label>
-        <label class="field wide">Observacoes<textarea v-model="novoFrete.observacoes" rows="3"></textarea></label>
-        <div class="form-actions freight-form-actions">
-          <button type="submit">{{ freteEditandoId ? 'Salvar alteracoes' : 'Cadastrar frete' }}</button>
-          <button v-if="freteEditandoId" class="secondary" type="button" @click="cancelarEdicaoFrete">Cancelar edicao</button>
-        </div>
-      </form>
-    </section>
-
-    <section v-if="aba === 'cadastros'" class="workspace">
-      <div class="section-head">
-        <div>
-          <h2>Cadastros</h2>
-          <p>Escolha o tipo de cadastro que deseja criar ou consultar.</p>
-        </div>
-      </div>
-
-      <div class="cadastro-switch">
-        <button :class="{ active: cadastroAtivo === 'motoristas' }" type="button" @click="cadastroAtivo = 'motoristas'">Motoristas</button>
-        <button :class="{ active: cadastroAtivo === 'veiculos' }" type="button" @click="cadastroAtivo = 'veiculos'">Caminhões</button>
-        <button :class="{ active: cadastroAtivo === 'empresas' }" type="button" @click="cadastroAtivo = 'empresas'">Empresas</button>
-      </div>
-
-      <div v-if="cadastroAtivo === 'motoristas'" class="registry-layout">
-        <div class="registry-form-card">
-          <div class="registry-card-head">
-            <span>01</span>
-            <div>
-              <h2>Motoristas</h2>
-              <p>MOTORISTA</p>
-            </div>
-          </div>
-        <form class="stack-form" @submit.prevent="cadastrarMotorista">
-          <input v-model="novoMotorista.nome" placeholder="Nome" required />
-          <input v-model="novoMotorista.telefone" placeholder="Telefone/WhatsApp" required />
-          <input v-model="novoMotorista.rg" placeholder="RG" required maxlength="12" @input="aplicarMascaraRgMotorista" />
-          <input v-model="novoMotorista.cpf" placeholder="CPF" required maxlength="14" @input="aplicarMascaraCpfMotorista" />
-          <input v-model="novoMotorista.cnh" placeholder="CNH" />
-          <textarea v-model="novoMotorista.observacoes" placeholder="Observacoes" rows="3"></textarea>
-          <div class="form-actions">
-            <button type="submit">{{ motoristaEditandoId ? 'Salvar motorista' : 'Cadastrar motorista' }}</button>
-            <button v-if="motoristaEditandoId" class="secondary" type="button" @click="limparMotorista">Cancelar edição</button>
-          </div>
-        </form>
-        </div>
-        <aside class="registry-directory">
-          <div class="registry-directory-head">
-            <div>
-              <strong>Motoristas cadastrados</strong>
-              <small>{{ motoristas.length }} registros</small>
-            </div>
-          </div>
-        <ul class="simple-list registry-list">
-          <li v-for="motorista in motoristas" :key="motorista.id">
-            <span>
-              {{ motorista.nome }}
-              <small>{{ motorista.telefone }}</small>
-              <small v-if="motorista.observacoes" class="registry-note">Obs: {{ motorista.observacoes }}</small>
-            </span>
-            <div class="registry-actions">
-              <button class="secondary compact-button" type="button" @click="editarMotorista(motorista)">Editar</button>
-              <button class="danger compact-button" type="button" @click="excluirMotorista(motorista.id)">Excluir</button>
-            </div>
-          </li>
-        </ul>
-        </aside>
-      </div>
-
-      <div v-if="cadastroAtivo === 'veiculos'" class="registry-layout">
-        <div class="registry-form-card">
-          <div class="registry-card-head">
-            <span>02</span>
-            <div>
-              <h2>Caminhoes</h2>
-              <p>CAMINHAO</p>
-            </div>
-          </div>
-        <form class="stack-form" @submit.prevent="cadastrarVeiculo">
-          <input v-model="novoVeiculo.placa" placeholder="Placa ou identificacao (ex: Terceiros)" required />
-          <select v-model="novoVeiculo.tipo" required>
-            <option v-for="tipo in tiposVeiculo" :key="tipo" :value="tipo">{{ tipo }}</option>
-          </select>
-          <textarea v-model="novoVeiculo.observacoes" placeholder="Observacoes" rows="3"></textarea>
-          <div class="form-actions">
-            <button type="submit">{{ veiculoEditandoId ? 'Salvar caminhao' : 'Cadastrar caminhao' }}</button>
-            <button v-if="veiculoEditandoId" class="secondary" type="button" @click="limparVeiculo">Cancelar edição</button>
-          </div>
-        </form>
-        </div>
-        <aside class="registry-directory">
-          <div class="registry-directory-head">
-            <div>
-              <strong>Caminhoes cadastrados</strong>
-              <small>{{ veiculos.length }} registros</small>
-            </div>
-          </div>
-        <ul class="simple-list registry-list">
-          <li v-for="veiculo in veiculos" :key="veiculo.id">
-            <span>
-              {{ veiculo.placa }}
-              <small>{{ veiculo.tipo }}</small>
-              <small v-if="veiculo.observacoes" class="registry-note">Obs: {{ veiculo.observacoes }}</small>
-            </span>
-            <div class="registry-actions">
-              <button class="secondary compact-button" type="button" @click="editarVeiculo(veiculo)">Editar</button>
-              <button class="danger compact-button" type="button" @click="excluirVeiculo(veiculo.id)">Excluir</button>
-            </div>
-          </li>
-        </ul>
-        </aside>
-      </div>
-
-      <div v-if="cadastroAtivo === 'empresas'" class="registry-layout">
-        <div class="registry-form-card">
-          <div class="registry-card-head">
-            <span>03</span>
-            <div>
-              <h2>Empresas</h2>
-              <p>EMPRESAS</p>
-            </div>
-          </div>
-        <form class="stack-form" @submit.prevent="cadastrarEmpresa">
-          <input v-model="novaEmpresa.nome" placeholder="Nome da empresa" required />
-          <input v-model="novaEmpresa.cnpj" placeholder="CNPJ" required />
-          <label class="check-field compact-check"><input v-model="novaEmpresa.cliente" type="checkbox" />Cliente</label>
-          <div class="cep-row">
-            <input v-model="novaEmpresa.cep" placeholder="CEP" required @blur="buscarCepEmpresa" />
-            <button class="secondary" type="button" @click="buscarCepEmpresa">Buscar CEP</button>
-          </div>
-          <input v-model="novaEmpresa.logradouro" placeholder="Rua / avenida" required />
-          <div class="address-grid">
-            <input v-model="novaEmpresa.numero" placeholder="Numero" required />
-            <input v-model="novaEmpresa.complemento" placeholder="Complemento" />
-          </div>
-          <input v-model="novaEmpresa.bairro" placeholder="Bairro" required />
-          <div class="address-grid">
-            <input v-model="novaEmpresa.cidade" placeholder="Cidade" required />
-            <input v-model="novaEmpresa.uf" placeholder="UF" maxlength="2" required />
-          </div>
-          <textarea v-model="novaEmpresa.observacoes" placeholder="Observacoes" rows="3"></textarea>
-          <div class="form-actions">
-            <button type="submit">{{ empresaEditandoId ? 'Salvar empresa' : 'Cadastrar empresa' }}</button>
-            <button v-if="empresaEditandoId" class="secondary" type="button" @click="limparEmpresa">Cancelar edição</button>
-          </div>
-        </form>
-        </div>
-        <aside class="registry-directory">
-          <div class="registry-directory-head">
-            <div>
-              <strong>Empresas cadastradas</strong>
-              <small>{{ empresas.length }} registros</small>
-            </div>
-          </div>
-        <ul class="simple-list registry-list">
-          <li v-for="empresa in empresas" :key="empresa.id">
-            <span>
-              {{ empresa.nome }}
-              <small>{{ empresa.cnpj }} - {{ enderecoEmpresa(empresa) }}</small>
-              <small v-if="empresa.cliente" class="registry-note">Cliente</small>
-              <small v-if="empresa.observacoes" class="registry-note">Obs: {{ empresa.observacoes }}</small>
-            </span>
-            <div class="registry-actions">
-              <button class="secondary compact-button" type="button" @click="editarEmpresa(empresa)">Editar</button>
-              <button class="danger compact-button" type="button" @click="excluirEmpresa(empresa.id)">Excluir</button>
-            </div>
-          </li>
-        </ul>
-        </aside>
-      </div>
-    </section>
-
-    <section v-if="aba === 'relatorios'" class="workspace">
-      <div class="section-head">
-        <div>
-          <h2>Status dos motoristas</h2>
-          <p>Cores indicam quem esta em servico, disponivel ou indisponivel.</p>
-        </div>
-        <button type="button" @click="exportarHistoricoMotoristas">Exportar historico Excel</button>
-      </div>
-
-      <div class="driver-cards">
-        <article v-for="motorista in motoristasAlocacao" :key="motorista.id" class="driver-card" :class="classeSituacaoMotorista(motorista)">
-          <div class="driver-card-head">
-            <div>
-              <h3>{{ motorista.nome }}</h3>
-              <p v-if="motorista.observacoes">{{ motorista.observacoes }}</p>
-            </div>
-            <span class="driver-status">{{ situacaoMotorista(motorista) }}</span>
-          </div>
-          <div class="driver-stats">
-            <span><strong>{{ motorista.viagens_dia }}</strong>Hoje</span>
-            <span><strong>{{ motorista.viagens_semana }}</strong>Semana</span>
-          </div>
-          <div class="driver-card-body">
-            <div v-if="fretesUsoMotorista(motorista).length > 0" class="driver-active-freights">
-              <strong>Fretes em aberto</strong>
-              <div v-for="frete in fretesUsoMotorista(motorista)" :key="frete.id" class="driver-active-row">
-                <span>{{ formatarData(frete.data_coleta) }} - {{ horarioFrete(frete) }}</span>
-                <small>{{ frete.cliente }} | {{ frete.origem }} -> {{ frete.destino }}</small>
-                <small>{{ frete.status }}</small>
-              </div>
-            </div>
-            <div v-else class="driver-active-empty">Sem fretes em aberto</div>
-          </div>
-          <button class="secondary driver-detail-button" type="button" @click="motoristaAberto = motoristaAberto === motorista.id ? null : motorista.id">
-            {{ motoristaAberto === motorista.id ? 'Ocultar dados' : 'Ver dados' }}
-          </button>
-          <div v-if="motoristaAberto === motorista.id" class="driver-data">
-            <span>Telefone: {{ motorista.telefone }}</span>
-            <span>RG: {{ formatarRg(motorista.rg) }}</span>
-            <span>CPF: {{ formatarCpf(motorista.cpf) }}</span>
-
-            <div class="driver-history">
-              <strong>Historico de fretes</strong>
-              <div v-for="frete in historicoFretesMotorista(motorista.id)" :key="frete.id" class="driver-history-row">
-                <div>
-                  <span>{{ formatarData(frete.data_coleta) }}</span>
-                  <small>{{ frete.origem }} -> {{ frete.destino }}</small>
-                </div>
-                <p v-if="pontosAdicionaisFrete(frete).length > 0">
-                  Pontos adicionais: {{ pontosAdicionaisFrete(frete).join(', ') }}
-                </p>
-                <p v-if="frete.observacoes">Obs: {{ frete.observacoes }}</p>
-              </div>
-              <p v-if="historicoFretesMotorista(motorista.id).length === 0" class="driver-history-empty">
-                Nenhum frete concluido encontrado.
-              </p>
-            </div>
-          </div>
-        </article>
-      </div>
-    </section>
+      <RouterView v-slot="{ Component }">
+        <component :is="Component" :state="viewState" />
+      </RouterView>
     </div>
   </main>
 </template>

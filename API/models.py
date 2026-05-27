@@ -23,6 +23,7 @@ class Veiculo(Base):
     placa = Column(String, nullable=False)
     tipo = Column(String, nullable=False)
     observacoes = Column(Text, nullable=True)
+    observacao_estado = Column(Text, nullable=True)
     motivo_indisponibilidade = Column(Text, nullable=True)
     ativo = Column(Boolean, default=True)
 
@@ -41,6 +42,43 @@ class Empresa(Base):
     cidade = Column(String, nullable=True)
     uf = Column(String, nullable=True)
     endereco = Column(Text, nullable=False)
+    observacoes = Column(Text, nullable=True)
+    ativo = Column(Boolean, default=True)
+
+class Fornecedor(Base):
+    __tablename__ = "fornecedores"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    telefone = Column(String, nullable=True)
+    cep = Column(String, nullable=True)
+    logradouro = Column(String, nullable=True)
+    numero = Column(String, nullable=True)
+    complemento = Column(String, nullable=True)
+    bairro = Column(String, nullable=True)
+    endereco = Column(Text, nullable=False)
+    cidade = Column(String, nullable=False)
+    uf = Column(String, nullable=True)
+    marca = Column(String, nullable=False)
+    observacoes = Column(Text, nullable=True)
+    ativo = Column(Boolean, default=True)
+
+class PrestadorServico(Base):
+    __tablename__ = "prestadores_servicos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    telefone = Column(String, nullable=True)
+    cep = Column(String, nullable=True)
+    logradouro = Column(String, nullable=True)
+    rua = Column(String, nullable=False)
+    numero = Column(String, nullable=True)
+    complemento = Column(String, nullable=True)
+    bairro = Column(String, nullable=True)
+    cidade = Column(String, nullable=False)
+    uf = Column(String, nullable=True)
+    endereco = Column(Text, nullable=False, default="")
+    tipo = Column(String, nullable=False)
     observacoes = Column(Text, nullable=True)
     ativo = Column(Boolean, default=True)
 
