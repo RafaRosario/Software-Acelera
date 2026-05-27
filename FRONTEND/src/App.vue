@@ -160,7 +160,7 @@ const novoFornecedor = ref({
   marca: '',
   observacoes: '',
 })
-const tiposPrestadorServico = ['valvula', 'mecanicos', 'bombistas']
+const tiposPrestadorServico = ['valvula', 'mecanicos', 'bombistas', 'outros']
 const novoPrestadorServico = ref({
   nome: '',
   telefone: '',
@@ -2198,18 +2198,11 @@ onMounted(() => {
     <button v-if="menuMobileAberto" class="sidebar-scrim" type="button" aria-label="Fechar menu" @click="menuMobileAberto = false"></button>
 
     <div class="content-shell">
-      <header class="topbar">
+      <div class="content-mobile-actions">
         <button class="mobile-menu-button" type="button" aria-label="Abrir menu" @click="menuMobileAberto = true">
           <span class="hamburger-lines" aria-hidden="true"><i></i><i></i><i></i></span>
         </button>
-        <div>
-          <p class="eyebrow">{{ paginaAtual.resumo }}</p>
-          <h1>{{ paginaAtual.titulo }}</h1>
-        </div>
-        <button class="ghost-button refresh-button" type="button" @click="carregarTudo">
-          Atualizar
-        </button>
-      </header>
+      </div>
 
       <section v-if="erro" class="alert">{{ erro }}</section>
 

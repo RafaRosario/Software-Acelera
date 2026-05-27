@@ -24,6 +24,9 @@ const {
 const buscaPrestador = ref('')
 const filtroCidade = ref('Todos')
 const filtroTipo = ref('Todos')
+const formularioAberto = ref(false)
+
+const formularioVisivel = computed(() => formularioAberto.value || Boolean(prestadorEditandoId.value))
 
 const cidadesPrestadores = computed(() => {
   return [...new Set(prestadoresServicos.value.map((prestador) => String(prestador.cidade || '').trim()).filter(Boolean))]
@@ -34,6 +37,20 @@ const tiposPrestadores = computed(() => {
   return [...new Set(prestadoresServicos.value.map((prestador) => String(prestador.tipo || '').trim()).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, 'pt-BR'))
 })
+
+const rotuloTipoPrestador = (tipo) => {
+  if (tipo === 'valvula') return 'Válvula'
+  if (tipo === 'mecanicos') return 'Mecânicos'
+  if (tipo === 'bombistas') return 'Bombistas'
+  if (tipo === 'outros') return 'Outros'
+  return tipo
+}
+
+const enderecoPrestador = (prestador) => {
+  return prestador.endereco || [prestador.logradouro || prestador.rua, prestador.numero, prestador.bairro, prestador.cidade, prestador.uf, prestador.cep]
+    .filter(Boolean)
+    .join(', ')
+}
 
 const prestadoresFiltrados = computed(() => {
   const termo = normalizarTextoBusca.value(buscaPrestador.value)
@@ -54,6 +71,8 @@ const prestadoresFiltrados = computed(() => {
       prestador.uf,
       prestador.tipo,
       prestador.observacoes,
+      enderecoPrestador(prestador),
+      rotuloTipoPrestador(prestador.tipo),
     ]
       .filter(Boolean)
       .join(' ')
@@ -61,37 +80,97 @@ const prestadoresFiltrados = computed(() => {
   })
 })
 
-const enderecoPrestador = (prestador) => {
-  return prestador.endereco || [prestador.logradouro || prestador.rua, prestador.numero, prestador.bairro, prestador.cidade, prestador.uf, prestador.cep].filter(Boolean).join(', ')
+const abrirFormularioPrestador = () => {
+  formularioAberto.value = true
 }
 
-const rotuloTipoPrestador = (tipo) => {
-  if (tipo === 'valvula') return 'Válvula'
-  if (tipo === 'mecanicos') return 'Mecânicos'
-  if (tipo === 'bombistas') return 'Bombistas'
-  return tipo
+const alternarFormularioPrestador = () => {
+  formularioAberto.value = !formularioAberto.value
+}
+
+const abrirEdicaoPrestador = (prestador) => {
+  formularioAberto.value = true
+  editarPrestadorServico.value(prestador)
+}
+
+const cancelarFormularioPrestador = () => {
+  limparPrestadorServico.value()
+  formularioAberto.value = false
 }
 </script>
 
 <template>
   <section class="workspace">
-    <div class="section-head">
-      <div>
-        <h2>Prestadores de serviços</h2>
-        <p>Cadastro de válvula, mecânico e bombista.</p>
-      </div>
-    </div>
-
-    <div class="registry-layout">
-      <div class="registry-form-card">
-        <div class="registry-card-head">
-          <span>05</span>
-          <div>
-            <h2>Novo prestador</h2>
-            <p>SERVIÇO</p>
+    <div class="focus-directory-layout">
+      <section class="focus-directory-main">
+        <header class="focus-directory-main-head">
+          <div class="focus-page-headline">
+            <p class="focus-page-kicker">PRESTADORES</p>
+            <h2>Prestadores de serviços</h2>
+            <small>Cadastro de válvula, mecânico e bombista.</small>
+            <span class="focus-page-count">{{ prestadoresFiltrados.length }} de {{ prestadoresServicos.length }} registros</span>
           </div>
+          <div class="focus-directory-meta">
+            <span class="focus-chip">{{ cidadesPrestadores.length }} cidades</span>
+            <span class="focus-chip">{{ tiposPrestadores.length }} tipos</span>
+            <button class="secondary compact-button" type="button" @click="abrirFormularioPrestador">Novo prestador</button>
+          </div>
+        </header>
+
+        <div class="focus-directory-toolbar">
+          <label class="field">
+            Buscar
+            <input v-model="buscaPrestador" type="search" placeholder="Nome, tipo, cidade, telefone, CEP..." />
+          </label>
+          <label class="field">
+            Cidade
+            <select v-model="filtroCidade">
+              <option value="Todos">Todas</option>
+              <option v-for="cidade in cidadesPrestadores" :key="cidade" :value="cidade">{{ cidade }}</option>
+            </select>
+          </label>
+          <label class="field">
+            Tipo
+            <select v-model="filtroTipo">
+              <option value="Todos">Todos</option>
+              <option v-for="tipo in tiposPrestadores" :key="tipo" :value="tipo">{{ rotuloTipoPrestador(tipo) }}</option>
+            </select>
+          </label>
         </div>
-        <form class="stack-form" @submit.prevent="cadastrarPrestadorServico">
+
+        <ul class="focus-directory-cards">
+          <li v-for="prestador in prestadoresFiltrados" :key="prestador.id">
+            <div class="focus-directory-card-main">
+              <div class="focus-directory-card-title">
+                <strong>{{ prestador.nome }}</strong>
+                <span class="focus-tag">{{ rotuloTipoPrestador(prestador.tipo) }}</span>
+              </div>
+              <small class="focus-directory-card-line">{{ prestador.cidade || 'Cidade não informada' }} | {{ prestador.telefone || 'Sem telefone' }} | {{ prestador.cep || 'Sem CEP' }}</small>
+              <small class="focus-directory-card-line">{{ enderecoPrestador(prestador) || 'Endereço não informado' }}</small>
+              <small v-if="prestador.observacoes" class="focus-directory-note">{{ prestador.observacoes }}</small>
+            </div>
+            <div class="focus-directory-card-actions">
+              <button class="secondary compact-button" type="button" @click="abrirEdicaoPrestador(prestador)">Editar</button>
+              <button class="danger compact-button" type="button" @click="excluirPrestadorServico(prestador.id)">Excluir</button>
+            </div>
+          </li>
+        </ul>
+
+        <p v-if="prestadoresFiltrados.length === 0" class="empty">Nenhum prestador encontrado.</p>
+      </section>
+
+      <aside class="focus-directory-aside" :class="{ collapsed: !formularioVisivel }">
+        <div class="focus-directory-aside-head">
+          <div>
+            <h3>{{ prestadorEditandoId ? 'Editar prestador' : 'Cadastro rápido' }}</h3>
+            <p>Formulário compacto para inclusão e ajustes.</p>
+          </div>
+          <button class="ghost-button compact-button" type="button" @click="alternarFormularioPrestador">
+            {{ formularioVisivel ? 'Ocultar' : 'Abrir' }}
+          </button>
+        </div>
+
+        <form v-if="formularioVisivel" class="stack-form compact-stack-form" @submit.prevent="cadastrarPrestadorServico">
           <input v-model="novoPrestadorServico.nome" placeholder="Nome" required />
           <input v-model="novoPrestadorServico.telefone" placeholder="Telefone" />
           <select v-model="novoPrestadorServico.tipo" required>
@@ -114,55 +193,18 @@ const rotuloTipoPrestador = (tipo) => {
           <textarea v-model="novoPrestadorServico.observacoes" placeholder="Observações" rows="3"></textarea>
           <div class="form-actions">
             <button type="submit">{{ prestadorEditandoId ? 'Salvar prestador' : 'Cadastrar prestador' }}</button>
-            <button v-if="prestadorEditandoId" class="secondary" type="button" @click="limparPrestadorServico">Cancelar edição</button>
+            <button
+              v-if="prestadorEditandoId || formularioAberto"
+              class="secondary"
+              type="button"
+              @click="cancelarFormularioPrestador"
+            >
+              Cancelar
+            </button>
           </div>
         </form>
-      </div>
 
-      <aside class="registry-directory">
-        <div class="registry-directory-head">
-          <div>
-            <strong>Prestadores cadastrados</strong>
-            <small>{{ prestadoresFiltrados.length }} de {{ prestadoresServicos.length }} registros</small>
-          </div>
-        </div>
-
-        <div class="form-grid">
-          <label class="field">
-            Buscar
-            <input v-model="buscaPrestador" type="search" placeholder="Nome, tipo, cidade, telefone, CEP..." />
-          </label>
-          <label class="field">
-            Cidade
-            <select v-model="filtroCidade">
-              <option value="Todos">Todas</option>
-              <option v-for="cidade in cidadesPrestadores" :key="cidade" :value="cidade">{{ cidade }}</option>
-            </select>
-          </label>
-          <label class="field">
-            Tipo
-            <select v-model="filtroTipo">
-              <option value="Todos">Todos</option>
-              <option v-for="tipo in tiposPrestadores" :key="tipo" :value="tipo">{{ rotuloTipoPrestador(tipo) }}</option>
-            </select>
-          </label>
-        </div>
-
-        <ul class="simple-list registry-list">
-          <li v-for="prestador in prestadoresFiltrados" :key="prestador.id">
-            <span>
-              {{ prestador.nome }}
-              <small>{{ rotuloTipoPrestador(prestador.tipo) }} | {{ prestador.telefone || 'Sem telefone' }} | {{ prestador.cep || 'Sem CEP' }}</small>
-              <small class="registry-note">{{ enderecoPrestador(prestador) }}</small>
-              <small v-if="prestador.observacoes" class="registry-note">Obs: {{ prestador.observacoes }}</small>
-            </span>
-            <div class="registry-actions">
-              <button class="secondary compact-button" type="button" @click="editarPrestadorServico(prestador)">Editar</button>
-              <button class="danger compact-button" type="button" @click="excluirPrestadorServico(prestador.id)">Excluir</button>
-            </div>
-          </li>
-        </ul>
-        <p v-if="prestadoresFiltrados.length === 0" class="empty">Nenhum prestador encontrado.</p>
+        <p v-else class="focus-form-hint">Clique em "Abrir" para cadastrar ou editar prestadores.</p>
       </aside>
     </div>
   </section>
