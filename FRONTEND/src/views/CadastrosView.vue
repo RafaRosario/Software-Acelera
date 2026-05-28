@@ -84,10 +84,10 @@ const {
           <input v-model="novoMotorista.rg" placeholder="RG" required maxlength="12" @input="aplicarMascaraRgMotorista" />
           <input v-model="novoMotorista.cpf" placeholder="CPF" required maxlength="14" @input="aplicarMascaraCpfMotorista" />
           <input v-model="novoMotorista.cnh" placeholder="CNH" />
-          <textarea v-model="novoMotorista.observacoes" placeholder="ObservaÃ§Ãµes" rows="3"></textarea>
+          <textarea v-model="novoMotorista.observacoes" placeholder="Observações" rows="3"></textarea>
           <div class="form-actions">
             <button type="submit">{{ motoristaEditandoId ? 'Salvar motorista' : 'Cadastrar motorista' }}</button>
-            <button v-if="motoristaEditandoId" class="secondary" type="button" @click="limparMotorista">Cancelar ediÃ§Ã£o</button>
+            <button v-if="motoristaEditandoId" class="secondary" type="button" @click="limparMotorista">Cancelar edição</button>
           </div>
         </form>
         </div>
@@ -125,25 +125,25 @@ const {
             <span>02</span>
             <div>
               <h2>Caminhões</h2>
-              <p>CAMINHÃƒO</p>
+              <p>CAMINHÃO</p>
             </div>
           </div>
         <form class="stack-form" @submit.prevent="cadastrarVeiculo">
-          <input v-model="novoVeiculo.placa" placeholder="Placa ou identificaÃ§Ã£o (ex: Terceiros)" required />
+          <input v-model="novoVeiculo.placa" placeholder="Placa ou identificação (ex: Terceiros)" required />
           <select v-model="novoVeiculo.tipo" required>
             <option v-for="tipo in tiposVeiculo" :key="tipo" :value="tipo">{{ tipo }}</option>
           </select>
-          <textarea v-model="novoVeiculo.observacoes" placeholder="ObservaÃ§Ãµes" rows="3"></textarea>
+          <textarea v-model="novoVeiculo.observacoes" placeholder="Observações" rows="3"></textarea>
           <label class="field">
-            ObservaÃ§Ã£o
+            Observação
             <textarea
               v-model="novoVeiculo.observacao_estado"
               rows="3"
             ></textarea>
           </label>
           <div class="form-actions">
-            <button type="submit">{{ veiculoEditandoId ? 'Salvar caminhÃ£o' : 'Cadastrar caminhÃ£o' }}</button>
-            <button v-if="veiculoEditandoId" class="secondary" type="button" @click="limparVeiculo">Cancelar ediÃ§Ã£o</button>
+            <button type="submit">{{ veiculoEditandoId ? 'Salvar caminhão' : 'Cadastrar caminhão' }}</button>
+            <button v-if="veiculoEditandoId" class="secondary" type="button" @click="limparVeiculo">Cancelar edição</button>
           </div>
         </form>
         </div>
@@ -155,7 +155,7 @@ const {
             </div>
             <label class="field compact registry-search">
               Buscar
-              <input v-model="buscaVeiculosCadastro" type="search" placeholder="Placa, tipo, observaÃ§Ãµes, estado..." />
+              <input v-model="buscaVeiculosCadastro" type="search" placeholder="Placa, tipo, observações, estado..." />
             </label>
           </div>
         <ul class="simple-list registry-list">
@@ -172,7 +172,7 @@ const {
             </div>
           </li>
         </ul>
-        <p v-if="veiculosCadastroFiltrados.length === 0" class="empty">Nenhum caminhÃ£o encontrado.</p>
+        <p v-if="veiculosCadastroFiltrados.length === 0" class="empty">Nenhum caminhão encontrado.</p>
         </aside>
       </div>
 
@@ -195,7 +195,7 @@ const {
           </div>
           <input v-model="novaEmpresa.logradouro" placeholder="Rua / avenida" required />
           <div class="address-grid">
-            <input v-model="novaEmpresa.numero" placeholder="NÃºmero" required />
+            <input v-model="novaEmpresa.numero" placeholder="Número" required />
             <input v-model="novaEmpresa.complemento" placeholder="Complemento" />
           </div>
           <input v-model="novaEmpresa.bairro" placeholder="Bairro" required />
@@ -203,10 +203,10 @@ const {
             <input v-model="novaEmpresa.cidade" placeholder="Cidade" required />
             <input v-model="novaEmpresa.uf" placeholder="UF" maxlength="2" required />
           </div>
-          <textarea v-model="novaEmpresa.observacoes" placeholder="ObservaÃ§Ãµes" rows="3"></textarea>
+          <textarea v-model="novaEmpresa.observacoes" placeholder="Observações" rows="3"></textarea>
           <div class="form-actions">
             <button type="submit">{{ empresaEditandoId ? 'Salvar empresa' : 'Cadastrar empresa' }}</button>
-            <button v-if="empresaEditandoId" class="secondary" type="button" @click="limparEmpresa">Cancelar ediÃ§Ã£o</button>
+            <button v-if="empresaEditandoId" class="secondary" type="button" @click="limparEmpresa">Cancelar edição</button>
           </div>
         </form>
         </div>
@@ -218,7 +218,7 @@ const {
             </div>
             <label class="field compact registry-search">
               Buscar
-              <input v-model="buscaEmpresasCadastro" type="search" placeholder="Nome, CNPJ, cidade, endereÃ§o..." />
+              <input v-model="buscaEmpresasCadastro" type="search" placeholder="Nome, CNPJ, cidade, endereço..." />
             </label>
           </div>
         <ul class="simple-list registry-list">
