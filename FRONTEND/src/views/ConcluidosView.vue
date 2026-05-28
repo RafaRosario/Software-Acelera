@@ -22,6 +22,8 @@ const {
   fretesConcluidosFiltrados,
   nomeMotorista,
   placaVeiculo,
+  podeCriarFrete,
+  podeEditarConcluidos,
   pontosAdicionaisFrete,
   salvarDocumentoPreenchidoFrete,
   salvarFechamentoFrete,
@@ -67,7 +69,7 @@ const {
           <input v-model="dataFimConcluidos" type="date" :disabled="filtroConcluidos !== 'periodo'" />
         </label>
         <button type="button" @click="exportarConcluidos">Exportar Excel</button>
-        <button class="danger" type="button" @click="excluirConcluidosFiltrados">Excluir filtrados</button>
+        <button v-if="podeEditarConcluidos" class="danger" type="button" @click="excluirConcluidosFiltrados">Excluir filtrados</button>
       </div>
 
       <div class="metrics concluded-metrics">
@@ -75,7 +77,7 @@ const {
         <div><strong>{{ formatarMoeda(totalConcluido) }}</strong><span>Total informado</span></div>
       </div>
 
-      <div class="concluded-bulk-actions">
+      <div v-if="podeEditarConcluidos" class="concluded-bulk-actions">
         <button type="button" @click="salvarValoresConcluidosFiltrados">Salvar valores preenchidos</button>
       </div>
 
@@ -95,18 +97,20 @@ const {
               Nota fiscal
               <input
                 v-model="frete.nota_fiscal"
+                :disabled="!podeEditarConcluidos"
                 placeholder="Número da nota fiscal"
                 @change="salvarDocumentoPreenchidoFrete(frete, 'nota_fiscal')"
               />
             </label>
             <label class="field billing-field">
               OC
-              <input v-model="frete.oc" placeholder="Número da OC" @change="salvarDocumentoPreenchidoFrete(frete, 'oc')" />
+              <input v-model="frete.oc" :disabled="!podeEditarConcluidos" placeholder="Número da OC" @change="salvarDocumentoPreenchidoFrete(frete, 'oc')" />
             </label>
             <label class="field billing-field">
               Valor do serviço
               <input
                 v-model="frete.valor_servico"
+                :disabled="!podeEditarConcluidos"
                 type="number"
                 min="0"
                 step="0.01"
@@ -118,6 +122,7 @@ const {
               Valor do retorno
               <input
                 v-model="frete.valor_retorno"
+                :disabled="!podeEditarConcluidos"
                 type="number"
                 min="0"
                 step="0.01"
@@ -129,6 +134,7 @@ const {
               Valor do ponto adicional
               <input
                 v-model="frete.valor_ponto_adicional"
+                :disabled="!podeEditarConcluidos"
                 type="number"
                 min="0"
                 step="0.01"
@@ -145,8 +151,8 @@ const {
               <span v-if="pontosAdicionaisFrete(frete).length > 0">Ponto: {{ formatarMoeda(frete.valor_ponto_adicional) }}</span>
             </div>
             <div class="concluded-card-actions">
-              <button class="secondary" type="button" @click="editarFrete(frete)">Editar frete</button>
-              <button type="button" @click="salvarFechamentoFrete(frete)">Salvar fechamento</button>
+              <button v-if="podeCriarFrete" class="secondary" type="button" @click="editarFrete(frete)">Editar frete</button>
+              <button v-if="podeEditarConcluidos" type="button" @click="salvarFechamentoFrete(frete)">Salvar fechamento</button>
             </div>
           </div>
         </article>

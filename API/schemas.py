@@ -1,8 +1,8 @@
 import re
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from datetime import date, datetime, time
-from typing import Optional
+from typing import Literal, Optional
 
 class MotoristaBase(BaseModel):
     nome: str
@@ -332,3 +332,153 @@ class ChecklistFreteUpdate(BaseModel):
 class MotoristaComContagem(MotoristaResponse):
     viagens_dia: int
     viagens_semana: int
+
+
+CargoUsuario = Literal["admin", "controle", "motorista"]
+
+
+def _normalizar_email(valor: str) -> str:
+    return (valor or "").strip().lower()
+
+
+def _validar_email_simples(valor: str) -> str:
+    if "@" not in valor or valor.startswith("@") or valor.endswith("@"):
+        raise ValueError("Email invalido")
+    return valor
+
+
+class UsuarioSessao(BaseModel):
+    id: int
+    nome: str
+    email: str
+    cargo: CargoUsuario
+    motorista_id: Optional[int] = None
+    avatar_url: Optional[str] = None
+
+
+class AuthLoginRequest(BaseModel):
+    email: str
+    senha: str
+    nome: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def validar_email(cls, valor: str) -> str:
+        email = _normalizar_email(valor)
+        return _validar_email_simples(email)
+
+    @field_validator("senha")
+    @classmethod
+    def validar_senha(cls, valor: str) -> str:
+        senha = (valor or "").strip()
+        if len(senha) < 6:
+            raise ValueError("Senha deve ter no minimo 6 caracteres")
+        return senha
+
+    @field_validator("nome")
+    @classmethod
+    def validar_nome(cls, valor: Optional[str]) -> Optional[str]:
+        if valor is None:
+            return valor
+        nome = valor.strip()
+        if nome and len(nome) < 2:
+            raise ValueError("Nome invalido")
+        return nome or None
+
+
+class AuthLoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UsuarioSessao
+
+
+class UsuarioSistemaBase(BaseModel):
+    nome: str
+    email: str
+    cargo: CargoUsuario = "controle"
+    motorista_id: Optional[int] = None
+    ativo: bool = True
+
+    @field_validator("nome")
+    @classmethod
+    def validar_nome(cls, valor: str) -> str:
+        nome = (valor or "").strip()
+        if len(nome) < 2:
+            raise ValueError("Nome invalido")
+        return nome
+
+    @field_validator("email")
+    @classmethod
+    def validar_email(cls, valor: str) -> str:
+        email = _normalizar_email(valor)
+        return _validar_email_simples(email)
+
+    @model_validator(mode="after")
+    def validar_motorista(self):
+        if self.cargo == "motorista" and not self.motorista_id:
+            raise ValueError("Usuario motorista precisa estar vinculado a um motorista cadastrado")
+        return self
+
+
+class UsuarioSistemaCreate(UsuarioSistemaBase):
+    senha: str
+
+    @field_validator("senha")
+    @classmethod
+    def validar_senha(cls, valor: str) -> str:
+        senha = (valor or "").strip()
+        if len(senha) < 6:
+            raise ValueError("Senha deve ter no minimo 6 caracteres")
+        return senha
+
+
+class UsuarioSistemaUpdate(BaseModel):
+    nome: Optional[str] = None
+    email: Optional[str] = None
+    cargo: Optional[CargoUsuario] = None
+    motorista_id: Optional[int] = None
+    ativo: Optional[bool] = None
+    nova_senha: Optional[str] = None
+
+    @field_validator("nome")
+    @classmethod
+    def validar_nome(cls, valor: Optional[str]) -> Optional[str]:
+        if valor is None:
+            return valor
+        nome = valor.strip()
+        if len(nome) < 2:
+            raise ValueError("Nome invalido")
+        return nome
+
+    @field_validator("email")
+    @classmethod
+    def validar_email(cls, valor: Optional[str]) -> Optional[str]:
+        if valor is None:
+            return valor
+        email = _normalizar_email(valor)
+        return _validar_email_simples(email)
+
+    @field_validator("nova_senha")
+    @classmethod
+    def validar_nova_senha(cls, valor: Optional[str]) -> Optional[str]:
+        if valor is None:
+            return valor
+        senha = valor.strip()
+        if not senha:
+            return None
+        if len(senha) < 6:
+            raise ValueError("Senha deve ter no minimo 6 caracteres")
+        return senha
+
+
+class UsuarioSistemaResponse(BaseModel):
+    id: int
+    nome: str
+    email: str
+    cargo: CargoUsuario
+    ativo: bool
+    motorista_id: Optional[int] = None
+    motorista_nome: Optional[str] = None
+    avatar_url: Optional[str] = None
+    criado_em: datetime
+    atualizado_em: datetime

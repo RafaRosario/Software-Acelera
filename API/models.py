@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import Column, Integer, String, Boolean, Date, Time, DateTime, ForeignKey, Text, Float, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -14,6 +16,25 @@ class Motorista(Base):
     cnh = Column(String, nullable=True)
     observacoes = Column(Text, nullable=True)
     ativo = Column(Boolean, default=True)
+
+
+class Usuario(Base):
+    __tablename__ = "usuarios"
+    __table_args__ = (UniqueConstraint("email", name="uq_usuarios_email"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    email = Column(String, nullable=False, index=True, unique=True)
+    senha_hash = Column(String, nullable=True)
+    cargo = Column(String, nullable=False, default="controle")
+    google_sub = Column(String, nullable=True, unique=True)
+    avatar_url = Column(String, nullable=True)
+    ativo = Column(Boolean, default=True)
+    motorista_id = Column(Integer, ForeignKey("motoristas.id"), nullable=True, unique=True)
+    criado_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+    atualizado_em = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    motorista = relationship("Motorista")
 
 class Veiculo(Base):
     __tablename__ = "veiculos"

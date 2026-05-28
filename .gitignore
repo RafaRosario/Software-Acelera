@@ -21,3 +21,11 @@ FRONTEND/dist/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Env (segredos locais)
+.env
+.env.local
+API/.env
+API/.env.local
+FRONTEND/.env
+FRONTEND/.env.local

@@ -1,13 +1,21 @@
+import base64
+import hashlib
+import hmac
 import io
+import os
+import re
 import secrets
 import zipfile
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Optional
 from xml.sax.saxutils import escape
 
-from fastapi import Depends, FastAPI, HTTPException
+import jwt
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -15,6 +23,12 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from database import SessionLocal, engine
+
+API_DIR = Path(__file__).resolve().parent
+ROOT_DIR = API_DIR.parent
+load_dotenv(ROOT_DIR / ".env")
+load_dotenv(API_DIR / ".env")
+load_dotenv(API_DIR / ".env.local")
 
 
 STATUS_FRETE = [
@@ -28,6 +42,152 @@ STATUS_FRETE = [
     "retornando",
     "concluido",
 ]
+
+CARGO_ADMIN = "admin"
+CARGO_CONTROLE = "controle"
+CARGO_MOTORISTA = "motorista"
+CARGOS_VALIDOS = {CARGO_ADMIN, CARGO_CONTROLE, CARGO_MOTORISTA}
+JWT_ALGORITMO = "HS256"
+JWT_SECRET = os.getenv("ACELERA_JWT_SECRET", "acelera-dev-secret-altere-em-producao")
+JWT_EXPIRA_HORAS = max(1, int(os.getenv("ACELERA_JWT_EXPIRE_HOURS", "12")))
+SENHA_PBKDF2_ITERACOES = max(120_000, int(os.getenv("ACELERA_PASSWORD_ITERATIONS", "240000")))
+
+ROTAS_PUBLICAS = {"/", "/docs", "/redoc", "/openapi.json", "/auth/login"}
+ROTAS_PUBLICAS_PREFIXO = ("/checklists/",)
+
+
+def normalizar_email(email: str) -> str:
+    return (email or "").strip().lower()
+
+
+def nome_padrao_usuario(email: str) -> str:
+    prefixo = (email or "").split("@", 1)[0]
+    nome = re.sub(r"[._-]+", " ", prefixo).strip()
+    if not nome:
+        return "Administrador"
+    return " ".join(parte.capitalize() for parte in nome.split())
+
+
+def gerar_hash_senha(senha: str) -> str:
+    salt = os.urandom(16)
+    digest = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, SENHA_PBKDF2_ITERACOES)
+    salt_b64 = base64.urlsafe_b64encode(salt).decode("utf-8").rstrip("=")
+    digest_b64 = base64.urlsafe_b64encode(digest).decode("utf-8").rstrip("=")
+    return f"pbkdf2_sha256${SENHA_PBKDF2_ITERACOES}${salt_b64}${digest_b64}"
+
+
+def _decodificar_b64(valor: str) -> bytes:
+    padding = "=" * (-len(valor) % 4)
+    return base64.urlsafe_b64decode(f"{valor}{padding}")
+
+
+def conferir_hash_senha(senha: str, senha_hash: str) -> bool:
+    if not senha_hash:
+        return False
+
+    try:
+        algoritmo, iteracoes_bruto, salt_b64, digest_b64 = senha_hash.split("$", 3)
+        if algoritmo != "pbkdf2_sha256":
+            return False
+        iteracoes = int(iteracoes_bruto)
+        salt = _decodificar_b64(salt_b64)
+        hash_esperado = _decodificar_b64(digest_b64)
+    except Exception:
+        return False
+
+    hash_atual = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, iteracoes)
+    return hmac.compare_digest(hash_esperado, hash_atual)
+
+
+def caminho_normalizado(path: str) -> str:
+    caminho = (path or "").strip()
+    if not caminho:
+        return "/"
+    if caminho != "/" and caminho.endswith("/"):
+        caminho = caminho[:-1]
+    return caminho or "/"
+
+
+def rota_publica(path: str) -> bool:
+    caminho = caminho_normalizado(path)
+    if caminho in ROTAS_PUBLICAS:
+        return True
+    return any(caminho.startswith(prefixo) for prefixo in ROTAS_PUBLICAS_PREFIXO)
+
+
+def rota_permitida(cargo: str, metodo: str, path: str) -> bool:
+    if cargo == CARGO_ADMIN:
+        return True
+
+    caminho = caminho_normalizado(path)
+    metodo_http = (metodo or "").upper()
+
+    if caminho == "/auth/me" and metodo_http == "GET":
+        return True
+
+    if cargo == CARGO_CONTROLE:
+        if metodo_http != "GET":
+            return False
+        return caminho in {
+            "/fretes",
+            "/fretes/concluidos/exportar",
+            "/empresas",
+            "/motoristas",
+            "/veiculos",
+        }
+
+    if cargo == CARGO_MOTORISTA:
+        if metodo_http == "GET" and caminho == "/fretes":
+            return True
+        if metodo_http == "PUT" and re.fullmatch(r"/fretes/\d+/alocar", caminho):
+            return True
+        return False
+
+    return False
+
+
+def criar_token_acesso(usuario: models.Usuario) -> str:
+    expira_em = datetime.utcnow() + timedelta(hours=JWT_EXPIRA_HORAS)
+    payload = {
+        "sub": str(usuario.id),
+        "cargo": usuario.cargo,
+        "exp": expira_em,
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITMO)
+
+
+def ler_token_acesso(token: str) -> dict:
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITMO])
+        return payload
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token invalido")
+
+
+def serializar_usuario_sessao(usuario: models.Usuario) -> dict:
+    return {
+        "id": usuario.id,
+        "nome": usuario.nome,
+        "email": normalizar_email(usuario.email),
+        "cargo": usuario.cargo,
+        "motorista_id": usuario.motorista_id,
+        "avatar_url": usuario.avatar_url,
+    }
+
+
+def serializar_usuario_sistema(usuario: models.Usuario) -> dict:
+    return {
+        "id": usuario.id,
+        "nome": usuario.nome,
+        "email": normalizar_email(usuario.email),
+        "cargo": usuario.cargo,
+        "ativo": bool(usuario.ativo),
+        "motorista_id": usuario.motorista_id,
+        "motorista_nome": usuario.motorista.nome if usuario.motorista else None,
+        "avatar_url": usuario.avatar_url,
+        "criado_em": usuario.criado_em,
+        "atualizado_em": usuario.atualizado_em,
+    }
 
 
 def preparar_banco():
@@ -102,6 +262,54 @@ def preparar_banco():
         if "observacoes" not in colunas:
             with engine.begin() as conexao:
                 conexao.execute(text("ALTER TABLE motoristas ADD COLUMN observacoes TEXT"))
+
+    if "usuarios" in tabelas:
+        colunas = {coluna["name"] for coluna in inspector.get_columns("usuarios")}
+        ajustes = {
+            "nome": "ALTER TABLE usuarios ADD COLUMN nome VARCHAR DEFAULT '' NOT NULL",
+            "email": "ALTER TABLE usuarios ADD COLUMN email VARCHAR DEFAULT '' NOT NULL",
+            "senha_hash": "ALTER TABLE usuarios ADD COLUMN senha_hash VARCHAR",
+            "cargo": "ALTER TABLE usuarios ADD COLUMN cargo VARCHAR DEFAULT 'controle' NOT NULL",
+            "google_sub": "ALTER TABLE usuarios ADD COLUMN google_sub VARCHAR",
+            "avatar_url": "ALTER TABLE usuarios ADD COLUMN avatar_url VARCHAR",
+            "ativo": "ALTER TABLE usuarios ADD COLUMN ativo BOOLEAN DEFAULT 1",
+            "motorista_id": "ALTER TABLE usuarios ADD COLUMN motorista_id INTEGER",
+            "criado_em": "ALTER TABLE usuarios ADD COLUMN criado_em DATETIME",
+            "atualizado_em": "ALTER TABLE usuarios ADD COLUMN atualizado_em DATETIME",
+        }
+        agora = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+        with engine.begin() as conexao:
+            for coluna, comando in ajustes.items():
+                if coluna not in colunas:
+                    conexao.execute(text(comando))
+            conexao.execute(
+                text("""
+                    UPDATE usuarios
+                    SET email = LOWER(TRIM(COALESCE(email, ''))),
+                        nome = TRIM(COALESCE(nome, '')),
+                        cargo = LOWER(TRIM(COALESCE(cargo, 'controle')))
+                """)
+            )
+            conexao.execute(text(
+                "UPDATE usuarios SET cargo = 'controle' WHERE cargo NOT IN ('admin', 'controle', 'motorista')"
+            ))
+            conexao.execute(text("UPDATE usuarios SET nome = email WHERE nome = '' AND email <> ''"))
+            conexao.execute(
+                text("UPDATE usuarios SET senha_hash = NULL WHERE TRIM(COALESCE(senha_hash, '')) = ''")
+            )
+            conexao.execute(
+                text(
+                    "UPDATE usuarios SET criado_em = :agora WHERE criado_em IS NULL OR criado_em = ''"
+                ),
+                {"agora": agora},
+            )
+            conexao.execute(
+                text(
+                    "UPDATE usuarios SET atualizado_em = :agora WHERE atualizado_em IS NULL OR atualizado_em = ''"
+                ),
+                {"agora": agora},
+            )
 
     if "veiculos" in tabelas:
         colunas = {coluna["name"] for coluna in inspector.get_columns("veiculos")}
@@ -258,6 +466,59 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def usuario_logado(request: Request) -> dict:
+    dados = getattr(request.state, "usuario", None)
+    if not dados:
+        raise HTTPException(status_code=401, detail="Nao autenticado")
+    return dados
+
+
+@app.middleware("http")
+async def middleware_autenticacao(request: Request, call_next):
+    path = request.url.path
+
+    if request.method.upper() == "OPTIONS" or rota_publica(path):
+        return await call_next(request)
+
+    autorizacao = request.headers.get("Authorization", "")
+    if not autorizacao.lower().startswith("bearer "):
+        return JSONResponse(status_code=401, content={"detail": "Token de acesso obrigatorio"})
+
+    token = autorizacao.split(" ", 1)[1].strip()
+    if not token:
+        return JSONResponse(status_code=401, content={"detail": "Token de acesso invalido"})
+
+    try:
+        payload = ler_token_acesso(token)
+        usuario_id = int(payload.get("sub"))
+    except (HTTPException, TypeError, ValueError):
+        return JSONResponse(status_code=401, content={"detail": "Token de acesso invalido"})
+
+    with SessionLocal() as db:
+        usuario = db.query(models.Usuario).filter(models.Usuario.id == usuario_id).first()
+
+    if not usuario or not usuario.ativo:
+        return JSONResponse(status_code=403, content={"detail": "Usuario sem acesso"})
+
+    cargo = (usuario.cargo or CARGO_CONTROLE).strip().lower()
+    if cargo not in CARGOS_VALIDOS:
+        return JSONResponse(status_code=403, content={"detail": "Cargo sem permissao"})
+    if cargo == CARGO_MOTORISTA and not usuario.motorista_id:
+        return JSONResponse(status_code=403, content={"detail": "Motorista sem vinculo de cadastro"})
+    if not rota_permitida(cargo, request.method, path):
+        return JSONResponse(status_code=403, content={"detail": "Permissao insuficiente para esta operacao"})
+
+    request.state.usuario = {
+        "id": usuario.id,
+        "nome": usuario.nome,
+        "email": normalizar_email(usuario.email),
+        "cargo": cargo,
+        "motorista_id": usuario.motorista_id,
+        "avatar_url": usuario.avatar_url,
+    }
+    return await call_next(request)
 
 
 def montar_rota(frete: schemas.FreteCreate | schemas.FreteUpdate) -> str:
@@ -512,6 +773,169 @@ def obter_ou_404(db: Session, modelo, item_id: int, detalhe: str):
 @app.get("/", tags=["Home"])
 def home():
     return {"status": "API Acelera Transportes online", "status_frete": STATUS_FRETE}
+
+
+@app.post("/auth/login", response_model=schemas.AuthLoginResponse, tags=["Auth"])
+def login_interno(payload: schemas.AuthLoginRequest, db: Session = Depends(get_db)):
+    email = normalizar_email(payload.email)
+    senha = payload.senha.strip()
+    nome_informado = (payload.nome or "").strip()
+
+    usuario = db.query(models.Usuario).filter(func.lower(models.Usuario.email) == email).first()
+    total_usuarios = db.query(func.count(models.Usuario.id)).scalar() or 0
+    total_usuarios_com_senha = (
+        db.query(func.count(models.Usuario.id))
+        .filter(models.Usuario.senha_hash.isnot(None))
+        .filter(models.Usuario.senha_hash != "")
+        .scalar()
+        or 0
+    )
+
+    if not usuario:
+        if total_usuarios == 0:
+            usuario = models.Usuario(
+                nome=nome_informado or nome_padrao_usuario(email),
+                email=email,
+                senha_hash=gerar_hash_senha(senha),
+                cargo=CARGO_ADMIN,
+                ativo=True,
+            )
+            db.add(usuario)
+            db.commit()
+            db.refresh(usuario)
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail="Acesso nao autorizado. Solicite ao administrador o cadastro do seu email.",
+            )
+    else:
+        if not usuario.senha_hash:
+            cargo_sem_senha = (usuario.cargo or CARGO_CONTROLE).strip().lower()
+            if total_usuarios_com_senha == 0 and cargo_sem_senha == CARGO_ADMIN:
+                usuario.senha_hash = gerar_hash_senha(senha)
+                if not (usuario.nome or "").strip():
+                    usuario.nome = nome_informado or nome_padrao_usuario(email)
+                db.commit()
+                db.refresh(usuario)
+            else:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Senha ainda nao configurada para este acesso. Solicite ao administrador.",
+                )
+        elif not conferir_hash_senha(senha, usuario.senha_hash):
+            raise HTTPException(status_code=401, detail="Email ou senha invalidos")
+
+    if not usuario.ativo:
+        raise HTTPException(status_code=403, detail="Usuario inativo")
+
+    cargo = (usuario.cargo or CARGO_CONTROLE).strip().lower()
+    if cargo not in CARGOS_VALIDOS:
+        raise HTTPException(status_code=403, detail="Cargo de acesso invalido")
+    if cargo == CARGO_MOTORISTA and not usuario.motorista_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Usuario motorista sem vinculo com cadastro de motorista",
+        )
+
+    usuario.email = email
+    usuario.cargo = cargo
+    if nome_informado and total_usuarios == 0:
+        usuario.nome = nome_informado
+    db.commit()
+    db.refresh(usuario)
+
+    token = criar_token_acesso(usuario)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": serializar_usuario_sessao(usuario),
+    }
+
+
+@app.get("/auth/me", response_model=schemas.UsuarioSessao, tags=["Auth"])
+def auth_me(request: Request, db: Session = Depends(get_db)):
+    dados = usuario_logado(request)
+    usuario = db.query(models.Usuario).filter(models.Usuario.id == dados["id"]).first()
+    if not usuario or not usuario.ativo:
+        raise HTTPException(status_code=401, detail="Sessao invalida")
+    return serializar_usuario_sessao(usuario)
+
+
+@app.get("/usuarios/", response_model=list[schemas.UsuarioSistemaResponse], tags=["Usuarios"])
+def listar_usuarios(db: Session = Depends(get_db)):
+    usuarios = db.query(models.Usuario).order_by(models.Usuario.nome).all()
+    return [serializar_usuario_sistema(usuario) for usuario in usuarios]
+
+
+@app.post("/usuarios/", response_model=schemas.UsuarioSistemaResponse, tags=["Usuarios"])
+def criar_usuario_sistema(dados: schemas.UsuarioSistemaCreate, db: Session = Depends(get_db)):
+    email = normalizar_email(dados.email)
+    if db.query(models.Usuario).filter(func.lower(models.Usuario.email) == email).first():
+        raise HTTPException(status_code=400, detail="Email ja cadastrado")
+
+    motorista_id = dados.motorista_id if dados.cargo == CARGO_MOTORISTA else None
+    if motorista_id:
+        obter_ou_404(db, models.Motorista, motorista_id, "Motorista nao encontrado")
+        existente = db.query(models.Usuario).filter(models.Usuario.motorista_id == motorista_id).first()
+        if existente:
+            raise HTTPException(status_code=400, detail="Ja existe usuario vinculado a este motorista")
+
+    usuario = models.Usuario(
+        nome=dados.nome.strip(),
+        email=email,
+        senha_hash=gerar_hash_senha(dados.senha),
+        cargo=dados.cargo,
+        ativo=dados.ativo,
+        motorista_id=motorista_id,
+    )
+    db.add(usuario)
+    db.commit()
+    db.refresh(usuario)
+    return serializar_usuario_sistema(usuario)
+
+
+@app.put("/usuarios/{usuario_id}", response_model=schemas.UsuarioSistemaResponse, tags=["Usuarios"])
+def atualizar_usuario_sistema(usuario_id: int, dados: schemas.UsuarioSistemaUpdate, db: Session = Depends(get_db)):
+    usuario = obter_ou_404(db, models.Usuario, usuario_id, "Usuario nao encontrado")
+    dados_atualizacao = dados.model_dump(exclude_unset=True)
+
+    if "nome" in dados_atualizacao:
+        usuario.nome = dados_atualizacao["nome"].strip()
+    if "email" in dados_atualizacao:
+        email = normalizar_email(dados_atualizacao["email"])
+        existente = db.query(models.Usuario).filter(func.lower(models.Usuario.email) == email, models.Usuario.id != usuario_id).first()
+        if existente:
+            raise HTTPException(status_code=400, detail="Email ja cadastrado")
+        usuario.email = email
+    if "ativo" in dados_atualizacao:
+        usuario.ativo = bool(dados_atualizacao["ativo"])
+    if dados_atualizacao.get("nova_senha"):
+        usuario.senha_hash = gerar_hash_senha(dados_atualizacao["nova_senha"])
+
+    novo_cargo = dados_atualizacao.get("cargo", usuario.cargo)
+    motorista_id = dados_atualizacao.get("motorista_id", usuario.motorista_id)
+
+    if novo_cargo == CARGO_MOTORISTA and not motorista_id:
+        raise HTTPException(status_code=400, detail="Usuario motorista precisa de motorista vinculado")
+
+    if novo_cargo != CARGO_MOTORISTA:
+        motorista_id = None
+
+    if motorista_id:
+        obter_ou_404(db, models.Motorista, motorista_id, "Motorista nao encontrado")
+        existente = db.query(models.Usuario).filter(
+            models.Usuario.motorista_id == motorista_id,
+            models.Usuario.id != usuario_id,
+        ).first()
+        if existente:
+            raise HTTPException(status_code=400, detail="Ja existe usuario vinculado a este motorista")
+
+    usuario.cargo = novo_cargo
+    usuario.motorista_id = motorista_id
+
+    db.commit()
+    db.refresh(usuario)
+    return serializar_usuario_sistema(usuario)
 
 
 @app.post("/motoristas/", response_model=schemas.MotoristaResponse, tags=["Motoristas"])
@@ -822,8 +1246,14 @@ def criar_frete(frete: schemas.FreteCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/fretes/", response_model=list[schemas.FreteResponse], tags=["Fretes"])
-def listar_fretes(db: Session = Depends(get_db)):
-    return db.query(models.Frete).order_by(models.Frete.data_coleta, models.Frete.horario_coleta).all()
+def listar_fretes(request: Request, db: Session = Depends(get_db)):
+    dados_usuario = usuario_logado(request)
+    consulta = db.query(models.Frete)
+
+    if dados_usuario["cargo"] == CARGO_MOTORISTA:
+        consulta = consulta.filter(models.Frete.motorista_id == dados_usuario["motorista_id"])
+
+    return consulta.order_by(models.Frete.data_coleta, models.Frete.horario_coleta).all()
 
 
 @app.get("/checklists/{token}", response_model=schemas.ChecklistFreteResponse, tags=["Checklist"])
@@ -1022,8 +1452,25 @@ def atualizar_nota_fiscal_frete(frete_id: int, nota: schemas.FreteNotaFiscalUpda
 
 
 @app.put("/fretes/{frete_id}/alocar", response_model=schemas.FreteResponse, tags=["Fretes"])
-def alocar_frete(frete_id: int, alocacao: schemas.FreteUpdate, db: Session = Depends(get_db)):
+def alocar_frete(frete_id: int, alocacao: schemas.FreteUpdate, request: Request, db: Session = Depends(get_db)):
+    dados_usuario = usuario_logado(request)
     db_frete = obter_ou_404(db, models.Frete, frete_id, "Frete nao encontrado")
+
+    if dados_usuario["cargo"] == CARGO_MOTORISTA:
+        motorista_id_usuario = dados_usuario["motorista_id"]
+        if db_frete.motorista_id != motorista_id_usuario:
+            raise HTTPException(status_code=403, detail="Este frete nao pertence ao motorista logado")
+        if alocacao.motorista_id is not None and alocacao.motorista_id != motorista_id_usuario:
+            raise HTTPException(status_code=403, detail="Nao e permitido trocar motorista")
+        if alocacao.veiculo_id is not None:
+            raise HTTPException(status_code=403, detail="Nao e permitido trocar caminhao")
+        if not alocacao.status:
+            raise HTTPException(status_code=400, detail="Status obrigatorio")
+        db_frete.status = alocacao.status
+        db.commit()
+        db.refresh(db_frete)
+        return db_frete
+
     if alocacao.motorista_id is not None:
         obter_ou_404(db, models.Motorista, alocacao.motorista_id, "Motorista nao encontrado")
         db_frete.motorista_id = alocacao.motorista_id

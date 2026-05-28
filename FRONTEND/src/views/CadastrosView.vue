@@ -14,6 +14,7 @@ const {
   buscarCepEmpresa,
   cadastrarEmpresa,
   cadastrarMotorista,
+  cadastrarUsuarioSistema,
   cadastrarVeiculo,
   cadastroAtivo,
   buscaEmpresasCadastro,
@@ -21,7 +22,9 @@ const {
   buscaVeiculosCadastro,
   editarEmpresa,
   editarMotorista,
+  editarUsuarioSistema,
   editarVeiculo,
+  ehAdmin,
   empresaEditandoId,
   empresas,
   empresasCadastroFiltradas,
@@ -31,15 +34,19 @@ const {
   excluirVeiculo,
   limparEmpresa,
   limparMotorista,
+  limparUsuarioSistema,
   limparVeiculo,
   motoristaEditandoId,
   motoristas,
   motoristasCadastroFiltrados,
   novaEmpresa,
   novoMotorista,
+  novoUsuarioSistema,
   novoVeiculo,
   selecionarCadastroAtivo,
   tiposVeiculo,
+  usuarioSistemaEditandoId,
+  usuariosSistema,
   veiculoEditandoId,
   veiculosCadastroFiltrados,
   veiculos,
@@ -59,6 +66,7 @@ const {
         <button :class="{ active: cadastroAtivo === 'motoristas' }" type="button" @click="selecionarCadastroAtivo('motoristas')">Motoristas</button>
         <button :class="{ active: cadastroAtivo === 'veiculos' }" type="button" @click="selecionarCadastroAtivo('veiculos')">Caminhões</button>
         <button :class="{ active: cadastroAtivo === 'empresas' }" type="button" @click="selecionarCadastroAtivo('empresas')">Empresas</button>
+        <button v-if="ehAdmin" :class="{ active: cadastroAtivo === 'acessos' }" type="button" @click="selecionarCadastroAtivo('acessos')">Acessos</button>
       </div>
 
       <div v-if="cadastroAtivo === 'motoristas'" class="registry-layout">
@@ -228,6 +236,72 @@ const {
           </li>
         </ul>
         <p v-if="empresasCadastroFiltradas.length === 0" class="empty">Nenhuma empresa encontrada.</p>
+        </aside>
+      </div>
+
+      <div v-if="cadastroAtivo === 'acessos' && ehAdmin" class="registry-layout">
+        <div class="registry-form-card">
+          <div class="registry-card-head">
+            <span>04</span>
+            <div>
+              <h2>Acessos</h2>
+              <p>LOGIN</p>
+            </div>
+          </div>
+          <form class="stack-form" @submit.prevent="cadastrarUsuarioSistema">
+            <input v-model="novoUsuarioSistema.nome" placeholder="Nome do usuario" required />
+            <input v-model="novoUsuarioSistema.email" placeholder="Email de acesso" required />
+            <input
+              v-model="novoUsuarioSistema.senha"
+              :placeholder="usuarioSistemaEditandoId ? 'Nova senha (opcional)' : 'Senha de acesso (min. 6 caracteres)'"
+              :required="!usuarioSistemaEditandoId"
+              minlength="6"
+              type="password"
+            />
+            <label class="field">
+              Cargo
+              <select v-model="novoUsuarioSistema.cargo" required>
+                <option value="admin">Admin</option>
+                <option value="controle">Controle</option>
+                <option value="motorista">Motorista</option>
+              </select>
+            </label>
+            <label class="field">
+              Motorista vinculado
+              <select v-model="novoUsuarioSistema.motorista_id" :disabled="novoUsuarioSistema.cargo !== 'motorista'">
+                <option value="">Nao vincular</option>
+                <option v-for="motorista in motoristas" :key="motorista.id" :value="motorista.id">{{ motorista.nome }}</option>
+              </select>
+            </label>
+            <label class="check-field compact-check"><input v-model="novoUsuarioSistema.ativo" type="checkbox" />Acesso ativo</label>
+            <div class="form-actions">
+              <button type="submit">{{ usuarioSistemaEditandoId ? 'Salvar acesso' : 'Cadastrar acesso' }}</button>
+              <button class="secondary" type="button" @click="limparUsuarioSistema">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
+        <aside class="registry-directory">
+          <div class="registry-directory-head">
+            <div>
+              <strong>Usuarios com acesso</strong>
+              <small>{{ usuariosSistema.length }} registros</small>
+            </div>
+          </div>
+          <ul class="simple-list registry-list">
+            <li v-for="usuario in usuariosSistema" :key="usuario.id">
+              <span>
+                {{ usuario.nome }}
+                <small>{{ usuario.email }}</small>
+                <small class="registry-note">Cargo: {{ usuario.cargo }}<span v-if="usuario.motorista_nome"> | Motorista: {{ usuario.motorista_nome }}</span></small>
+                <small class="registry-note">{{ usuario.ativo ? 'Ativo' : 'Inativo' }}</small>
+              </span>
+              <div class="registry-actions">
+                <button class="secondary compact-button" type="button" @click="editarUsuarioSistema(usuario)">Editar</button>
+              </div>
+            </li>
+          </ul>
+          <p v-if="usuariosSistema.length === 0" class="empty">Nenhum acesso cadastrado.</p>
         </aside>
       </div>
     </section>

@@ -12,8 +12,7 @@ import iconCaminhao from './assets/icon-caminhao.png'
 import iconFornecedores from './assets/icon-fornecedores.png'
 import iconPrestadores from './assets/icon-prestadores.png'
 import ChecklistPublicView from './views/ChecklistPublicView.vue'
-
-const API_URL = 'http://127.0.0.1:8000'
+import { API_URL, authState, encerrarSessao, rotaInicialPorCargo, rotaPermitidaParaCargo } from './auth'
 const tiposVeiculo = ['Motoboy', 'Fiorino', 'Iveco', '3/4', 'Toco', 'Truk', 'Carreta']
 const STATUS_AGUARDANDO = 'Aguardando horario'
 const STATUS_CAMINHO_P1 = 'A caminho P1'
@@ -101,6 +100,33 @@ const menuMobileAberto = ref(false)
 const avisoPendenciasMostrado = ref(false)
 const checklistToken = computed(() => String(route.params.token || ''))
 const modoChecklist = computed(() => Boolean(checklistToken.value))
+const modoLogin = computed(() => route.path === '/login')
+const usuarioLogado = computed(() => authState.user)
+const cargoUsuario = computed(() => usuarioLogado.value?.cargo || null)
+const ehAdmin = computed(() => cargoUsuario.value === 'admin')
+const ehControle = computed(() => cargoUsuario.value === 'controle')
+const ehMotorista = computed(() => cargoUsuario.value === 'motorista')
+const podeEditarFretes = computed(() => ehAdmin.value)
+const podeMoverStatusFrete = computed(() => ehAdmin.value || ehMotorista.value)
+const podeEditarConcluidos = computed(() => ehAdmin.value)
+const podeGerenciarCadastros = computed(() => ehAdmin.value)
+const podeVerRelatoriosMotoristas = computed(() => ehAdmin.value)
+const podeVerCaminhoes = computed(() => ehAdmin.value)
+const podeVerFornecedores = computed(() => ehAdmin.value)
+const podeVerPrestadores = computed(() => ehAdmin.value)
+const podeCriarFrete = computed(() => ehAdmin.value)
+const mostrarAlocacaoCompleta = computed(() => ehAdmin.value)
+
+const usuariosSistema = ref([])
+const usuarioSistemaEditandoId = ref(null)
+const novoUsuarioSistema = ref({
+  nome: '',
+  email: '',
+  senha: '',
+  cargo: 'controle',
+  motorista_id: '',
+  ativo: true,
+})
 const checklistCarregando = ref(false)
 const checklistSalvando = ref(false)
 const checklistErro = ref('')
@@ -239,9 +265,25 @@ const paginaAtual = computed(() => {
   }
   return paginas[aba.value] || paginas.fretes
 })
+const rotaInicialUsuario = computed(() => rotaInicialPorCargo(cargoUsuario.value))
+
+const paginaPermitidaParaUsuario = (pagina) => {
+  const path = rotaPorPagina[pagina] || '/fretes'
+  return rotaPermitidaParaCargo(path, cargoUsuario.value)
+}
+
+const sairSistema = async () => {
+  encerrarSessao()
+  menuMobileAberto.value = false
+  await router.replace('/login')
+}
 
 const navegarParaPagina = (pagina, cadastro = null, substituir = false) => {
-  if (modoChecklist.value) return
+  if (modoChecklist.value || modoLogin.value) return
+  if (!paginaPermitidaParaUsuario(pagina)) {
+    router.replace(rotaInicialUsuario.value).catch(() => {})
+    return
+  }
 
   const path = rotaPorPagina[pagina] || '/fretes'
   const query = pagina === 'cadastros' ? { cadastro: cadastro || cadastroAtivo.value || 'motoristas' } : undefined
@@ -255,25 +297,38 @@ const navegarParaPagina = (pagina, cadastro = null, substituir = false) => {
 }
 
 const selecionarCadastroAtivo = (cadastro) => {
+  if (!podeGerenciarCadastros.value) return
   cadastroAtivo.value = cadastro
   if (aba.value === 'cadastros') navegarParaPagina('cadastros', cadastro, true)
 }
 
 const sincronizarRotaComEstado = () => {
-  if (modoChecklist.value) return
+  if (modoChecklist.value || modoLogin.value) return
 
   const pagina = paginaPorRota[route.path] || 'fretes'
+  if (!paginaPermitidaParaUsuario(pagina)) {
+    router.replace(rotaInicialUsuario.value).catch(() => {})
+    return
+  }
   if (aba.value !== pagina) aba.value = pagina
 
   if (pagina === 'cadastros') {
     const cadastro = String(route.query.cadastro || 'motoristas')
-    if (['motoristas', 'veiculos', 'empresas'].includes(cadastro)) {
+    if (['motoristas', 'veiculos', 'empresas', 'acessos'].includes(cadastro)) {
+      if (cadastro === 'acessos' && !ehAdmin.value) {
+        cadastroAtivo.value = 'motoristas'
+        return
+      }
       cadastroAtivo.value = cadastro
     }
   }
 }
 
 const abrirPagina = (pagina, cadastro = null) => {
+  if (!paginaPermitidaParaUsuario(pagina)) {
+    mostrarToast('Voce nao tem permissao para acessar esta tela.', 'error')
+    return
+  }
   aba.value = pagina
   if (cadastro) cadastroAtivo.value = cadastro
   menuMobileAberto.value = false
@@ -281,36 +336,77 @@ const abrirPagina = (pagina, cadastro = null) => {
 }
 
 const carregarTudo = async () => {
+  if (!usuarioLogado.value || modoLogin.value || modoChecklist.value) return
+
   carregando.value = true
   erro.value = ''
   try {
-    const [motoristasResp, alocacaoResp, veiculosResp, empresasResp, fretesResp, fornecedoresResp, prestadoresResp] = await Promise.all([
-      axios.get(`${API_URL}/motoristas/`),
-      axios.get(`${API_URL}/motoristas/alocacao/`),
-      axios.get(`${API_URL}/veiculos/`),
-      axios.get(`${API_URL}/empresas/`),
-      axios.get(`${API_URL}/fretes/`),
-      axios.get(`${API_URL}/fornecedores/`),
-      axios.get(`${API_URL}/prestadores-servicos/`),
-    ])
-    motoristas.value = motoristasResp.data
-    motoristasAlocacao.value = alocacaoResp.data
-    veiculos.value = veiculosResp.data
-    empresas.value = empresasResp.data
-    fretes.value = fretesResp.data
-    fornecedores.value = fornecedoresResp.data
-    prestadoresServicos.value = prestadoresResp.data
-    if (!avisoPendenciasMostrado.value && fretesResp.data.some(freteEstaAtrasado)) {
+    let fretesCarregados = []
+
+    if (ehMotorista.value) {
+      const fretesResp = await axios.get(`${API_URL}/fretes/`)
+      fretesCarregados = fretesResp.data
+      fretes.value = fretesCarregados
+      motoristas.value = []
+      motoristasAlocacao.value = []
+      veiculos.value = []
+      empresas.value = []
+      fornecedores.value = []
+      prestadoresServicos.value = []
+      usuariosSistema.value = []
+    } else if (ehControle.value) {
+      const [motoristasResp, veiculosResp, empresasResp, fretesResp] = await Promise.all([
+        axios.get(`${API_URL}/motoristas/`),
+        axios.get(`${API_URL}/veiculos/`),
+        axios.get(`${API_URL}/empresas/`),
+        axios.get(`${API_URL}/fretes/`),
+      ])
+      fretesCarregados = fretesResp.data
+      motoristas.value = motoristasResp.data
+      motoristasAlocacao.value = []
+      veiculos.value = veiculosResp.data
+      empresas.value = empresasResp.data
+      fretes.value = fretesCarregados
+      fornecedores.value = []
+      prestadoresServicos.value = []
+      usuariosSistema.value = []
+    } else {
+      const [motoristasResp, alocacaoResp, veiculosResp, empresasResp, fretesResp, fornecedoresResp, prestadoresResp, usuariosResp] = await Promise.all([
+        axios.get(`${API_URL}/motoristas/`),
+        axios.get(`${API_URL}/motoristas/alocacao/`),
+        axios.get(`${API_URL}/veiculos/`),
+        axios.get(`${API_URL}/empresas/`),
+        axios.get(`${API_URL}/fretes/`),
+        axios.get(`${API_URL}/fornecedores/`),
+        axios.get(`${API_URL}/prestadores-servicos/`),
+        axios.get(`${API_URL}/usuarios/`),
+      ])
+      fretesCarregados = fretesResp.data
+      motoristas.value = motoristasResp.data
+      motoristasAlocacao.value = alocacaoResp.data
+      veiculos.value = veiculosResp.data
+      empresas.value = empresasResp.data
+      fretes.value = fretesCarregados
+      fornecedores.value = fornecedoresResp.data
+      prestadoresServicos.value = prestadoresResp.data
+      usuariosSistema.value = usuariosResp.data
+    }
+
+    if (!avisoPendenciasMostrado.value && fretesCarregados.some(freteEstaAtrasado)) {
       avisoPendenciasMostrado.value = true
-      mostrarToast('Existem fretes antigos em aberto. Revise as pendências.', 'error')
+      mostrarToast('Existem fretes antigos em aberto. Revise as pendencias.', 'error')
     }
   } catch (error) {
-    erro.value = 'Não foi possível conectar na API. Verifique se o backend está rodando.'
+    if (error?.response?.status === 401 || error?.response?.status === 403) {
+      erro.value = 'Sua sessao expirou ou voce nao tem permissao para esta area.'
+      await sairSistema()
+      return
+    }
+    erro.value = String(error?.response?.data?.detail || 'Nao foi possivel conectar na API. Verifique se o backend esta rodando.')
   } finally {
     carregando.value = false
   }
 }
-
 function statusEhConcluido(status) {
   return status === STATUS_CONCLUIDO || status === 'Concluida'
 }
@@ -655,8 +751,19 @@ const empresasCadastroFiltradas = computed(() => {
   })
 })
 
-const nomeMotorista = (id) => motoristas.value.find((motorista) => motorista.id === id)?.nome || 'Sem motorista'
-const telefoneMotorista = (id) => motoristas.value.find((motorista) => motorista.id === id)?.telefone || ''
+const nomeMotorista = (id) => {
+  const encontrado = motoristas.value.find((motorista) => motorista.id === id)?.nome
+  if (encontrado) return encontrado
+  if (ehMotorista.value && Number(id) === Number(usuarioLogado.value?.motorista_id)) {
+    return usuarioLogado.value?.nome || 'Motorista'
+  }
+  return 'Sem motorista'
+}
+const telefoneMotorista = (id) => {
+  const telefone = motoristas.value.find((motorista) => motorista.id === id)?.telefone
+  if (telefone) return telefone
+  return ''
+}
 const placaVeiculo = (id) => veiculos.value.find((veiculo) => veiculo.id === id)?.placa || 'Sem caminhão'
 const veiculoPorId = (id) => veiculos.value.find((veiculo) => veiculo.id === id)
 
@@ -766,6 +873,7 @@ const rotaCompactaFrete = (frete) => {
 const horarioFrete = (frete) => frete.horario_coleta?.slice(0, 5) || '--:--'
 
 const abrirMenuStatusFrete = (event, frete) => {
+  if (!podeMoverStatusFrete.value) return
   const alvo = event?.currentTarget
   const caixa = alvo?.getBoundingClientRect?.()
   const viewportWidth = window.innerWidth || document.documentElement.clientWidth
@@ -797,6 +905,11 @@ const fecharMenuStatusFrete = () => {
 }
 
 const moverFreteParaStatus = async (frete, status) => {
+  if (!podeMoverStatusFrete.value) {
+    mostrarToast('Sem permissao para mover status.', 'error')
+    fecharMenuStatusFrete()
+    return
+  }
   if (!frete) return
   if (!statusDisponiveisFrete(frete).includes(status)) {
     mostrarToast('Este status não existe para este frete.', 'error')
@@ -850,11 +963,17 @@ const copiarAtualizacaoEdscha = async () => {
   mostrarToast('Atualização Edscha copiada.')
 }
 
-const normalizarAlocacao = (frete) => ({
-  motorista_id: frete.motorista_id ? Number(frete.motorista_id) : null,
-  veiculo_id: frete.veiculo_id ? Number(frete.veiculo_id) : null,
-  status: frete.status,
-})
+const normalizarAlocacao = (frete) => {
+  if (ehMotorista.value) {
+    return { status: frete.status }
+  }
+
+  return {
+    motorista_id: frete.motorista_id ? Number(frete.motorista_id) : null,
+    veiculo_id: frete.veiculo_id ? Number(frete.veiculo_id) : null,
+    status: frete.status,
+  }
+}
 
 const apenasDigitos = (valor) => String(valor || '').replace(/\D/g, '')
 
@@ -984,6 +1103,30 @@ const limparPrestadorServico = () => {
   }
 }
 
+const limparUsuarioSistema = () => {
+  usuarioSistemaEditandoId.value = null
+  novoUsuarioSistema.value = {
+    nome: '',
+    email: '',
+    senha: '',
+    cargo: 'controle',
+    motorista_id: '',
+    ativo: true,
+  }
+}
+
+const editarUsuarioSistema = (usuario) => {
+  usuarioSistemaEditandoId.value = usuario.id
+  novoUsuarioSistema.value = {
+    nome: usuario.nome || '',
+    email: usuario.email || '',
+    senha: '',
+    cargo: usuario.cargo || 'controle',
+    motorista_id: usuario.motorista_id || '',
+    ativo: Boolean(usuario.ativo),
+  }
+}
+
 const limparFormularioFrete = () => {
   freteEditandoId.value = null
   novoFrete.value = criarFormularioFreteVazio(filtroDataInicioFretes.value || new Date().toISOString().slice(0, 10))
@@ -993,6 +1136,10 @@ const limparFormularioFrete = () => {
 }
 
 const abrirNovoFrete = () => {
+  if (!podeCriarFrete.value) {
+    mostrarToast('Sem permissao para criar fretes.', 'error')
+    return
+  }
   abaRetornoEdicaoFrete.value = 'fretes'
   limparFormularioFrete()
   abrirPagina('novo-frete')
@@ -1005,6 +1152,10 @@ const cancelarEdicaoFrete = () => {
 }
 
 const editarFrete = (frete) => {
+  if (!podeCriarFrete.value) {
+    mostrarToast('Sem permissao para editar fretes.', 'error')
+    return
+  }
   abaRetornoEdicaoFrete.value = aba.value
   freteEditandoId.value = frete.id
   novoFrete.value = {
@@ -1109,7 +1260,57 @@ const editarPrestadorServico = (prestador) => {
   }
 }
 
+const cadastrarUsuarioSistema = async () => {
+  const senhaNormalizada = String(novoUsuarioSistema.value.senha || '').trim()
+  const payload = {
+    nome: (novoUsuarioSistema.value.nome || '').trim(),
+    email: (novoUsuarioSistema.value.email || '').trim().toLowerCase(),
+    cargo: novoUsuarioSistema.value.cargo || 'controle',
+    motorista_id: novoUsuarioSistema.value.cargo === 'motorista' && novoUsuarioSistema.value.motorista_id
+      ? Number(novoUsuarioSistema.value.motorista_id)
+      : null,
+    ativo: Boolean(novoUsuarioSistema.value.ativo),
+  }
+
+  if (!payload.nome || !payload.email) {
+    mostrarToast('Preencha nome e email para continuar.', 'error')
+    return
+  }
+
+  if (!usuarioSistemaEditandoId.value && senhaNormalizada.length < 6) {
+    mostrarToast('Defina uma senha com no minimo 6 caracteres.', 'error')
+    return
+  }
+
+  if (usuarioSistemaEditandoId.value && senhaNormalizada && senhaNormalizada.length < 6) {
+    mostrarToast('A nova senha precisa ter no minimo 6 caracteres.', 'error')
+    return
+  }
+
+  if (payload.cargo === 'motorista' && !payload.motorista_id) {
+    mostrarToast('Selecione o motorista vinculado para este acesso.', 'error')
+    return
+  }
+
+  try {
+    if (usuarioSistemaEditandoId.value) {
+      if (senhaNormalizada) payload.nova_senha = senhaNormalizada
+      await axios.put(`${API_URL}/usuarios/${usuarioSistemaEditandoId.value}`, payload)
+      mostrarToast('Acesso atualizado com sucesso.')
+    } else {
+      payload.senha = senhaNormalizada
+      await axios.post(`${API_URL}/usuarios/`, payload)
+      mostrarToast('Acesso cadastrado com sucesso.')
+    }
+    limparUsuarioSistema()
+    await carregarTudo()
+  } catch (error) {
+    mostrarToast(error?.response?.data?.detail || 'Nao foi possivel salvar o acesso.', 'error')
+  }
+}
+
 const cadastrarMotorista = async () => {
+  if (!podeGerenciarCadastros.value) return
   aplicarMascaraRgMotorista()
   aplicarMascaraCpfMotorista()
 
@@ -1136,6 +1337,7 @@ const cadastrarMotorista = async () => {
 }
 
 const cadastrarVeiculo = async () => {
+  if (!podeGerenciarCadastros.value) return
   const payload = {
     ...novoVeiculo.value,
     placa: novoVeiculo.value.placa.trim(),
@@ -1161,6 +1363,7 @@ const cadastrarVeiculo = async () => {
 }
 
 const cadastrarEmpresa = async () => {
+  if (!podeGerenciarCadastros.value) return
   if (empresaEditandoId.value) {
     await axios.put(`${API_URL}/empresas/${empresaEditandoId.value}`, novaEmpresa.value)
     limparEmpresa()
@@ -1174,6 +1377,7 @@ const cadastrarEmpresa = async () => {
 }
 
 const cadastrarFornecedor = async () => {
+  if (!podeGerenciarCadastros.value) return
   const payload = {
     nome: (novoFornecedor.value.nome || '').trim(),
     telefone: (novoFornecedor.value.telefone || '').trim(),
@@ -1213,6 +1417,7 @@ const cadastrarFornecedor = async () => {
 }
 
 const cadastrarPrestadorServico = async () => {
+  if (!podeGerenciarCadastros.value) return
   const payload = {
     nome: (novoPrestadorServico.value.nome || '').trim(),
     telefone: (novoPrestadorServico.value.telefone || '').trim(),
@@ -1345,6 +1550,11 @@ const payloadFormularioFrete = () => ({
 })
 
 const cadastrarFrete = async () => {
+  if (!podeCriarFrete.value) {
+    mostrarToast('Sem permissao para cadastrar fretes.', 'error')
+    return
+  }
+
   const payload = payloadFormularioFrete()
 
   if (freteEditandoId.value) {
@@ -1396,6 +1606,10 @@ const removerEmpresaColeta = (nome) => {
 }
 
 const salvarAlocacao = async (frete) => {
+  if (!podeMoverStatusFrete.value) {
+    mostrarToast('Sem permissao para alterar escala/status.', 'error')
+    return
+  }
   await salvarComFeedback('Escala salva com sucesso.', async () => {
     await axios.put(`${API_URL}/fretes/${frete.id}/alocar`, normalizarAlocacao(frete))
     await carregarTudo()
@@ -1407,6 +1621,7 @@ const salvarEscalaAutomaticamente = async (frete) => {
 }
 
 const iniciarArrastoFrete = (event, frete) => {
+  if (!podeMoverStatusFrete.value) return
   freteArrastandoId.value = frete.id
   event.dataTransfer.effectAllowed = 'move'
   event.dataTransfer.setData('text/plain', String(frete.id))
@@ -1418,6 +1633,10 @@ const encerrarArrastoFrete = () => {
 }
 
 const soltarFreteEmStatus = async (event, status) => {
+  if (!podeMoverStatusFrete.value) {
+    encerrarArrastoFrete()
+    return
+  }
   const freteId = Number(event.dataTransfer.getData('text/plain'))
   const frete = fretes.value.find((item) => item.id === freteId)
   statusDestinoAtivo.value = ''
@@ -1450,6 +1669,10 @@ const valorFretePayload = (frete) => ({
 })
 
 const salvarValorFrete = async (frete) => {
+  if (!podeEditarFretes.value) {
+    mostrarToast('Sem permissao para editar valores.', 'error')
+    return
+  }
   await salvarComFeedback('Valor salvo com sucesso.', async () => {
     await axios.put(`${API_URL}/fretes/${frete.id}/valor`, valorFretePayload(frete))
     await carregarTudo()
@@ -1457,6 +1680,10 @@ const salvarValorFrete = async (frete) => {
 }
 
 const salvarValoresConcluidosFiltrados = async () => {
+  if (!podeEditarConcluidos.value) {
+    mostrarToast('Sem permissao para editar concluidos.', 'error')
+    return
+  }
   const fretesComValor = fretesConcluidosFiltrados.value.filter((frete) => {
     const temValorServico = frete.valor_servico !== '' && frete.valor_servico !== null
     const temValorRetorno = frete.valor_retorno !== '' && frete.valor_retorno !== null
@@ -1480,6 +1707,10 @@ const salvarValoresConcluidosFiltrados = async () => {
 }
 
 const salvarDocumentosFrete = async (frete) => {
+  if (!podeEditarFretes.value) {
+    mostrarToast('Sem permissao para editar documentos.', 'error')
+    return
+  }
   await salvarComFeedback('OC salva com sucesso.', async () => {
     await axios.put(`${API_URL}/fretes/${frete.id}/documentos`, {
       cte: frete.cte || null,
@@ -1490,6 +1721,10 @@ const salvarDocumentosFrete = async (frete) => {
 }
 
 const salvarNotaFiscalFrete = async (frete) => {
+  if (!podeEditarFretes.value) {
+    mostrarToast('Sem permissao para editar nota fiscal.', 'error')
+    return
+  }
   await salvarComFeedback('Nota fiscal salva com sucesso.', async () => {
     await axios.put(`${API_URL}/fretes/${frete.id}/nota-fiscal`, {
       nota_fiscal: frete.nota_fiscal || null,
@@ -1516,6 +1751,10 @@ const salvarDocumentoPreenchidoFrete = async (frete, campo) => {
 }
 
 const salvarFechamentoFrete = async (frete) => {
+  if (!podeEditarConcluidos.value) {
+    mostrarToast('Sem permissao para salvar fechamento.', 'error')
+    return
+  }
   await salvarComFeedback('Fechamento salvo com sucesso.', async () => {
     await Promise.all([
       axios.put(`${API_URL}/fretes/${frete.id}/valor`, valorFretePayload(frete)),
@@ -1532,21 +1771,34 @@ const salvarFechamentoFrete = async (frete) => {
 }
 
 const excluirFrete = async (id) => {
+  if (!podeEditarFretes.value) {
+    mostrarToast('Sem permissao para excluir frete.', 'error')
+    return
+  }
   await axios.delete(`${API_URL}/fretes/${id}`)
   await carregarTudo()
 }
 
 const excluirMotorista = async (id) => {
+  if (!podeGerenciarCadastros.value) {
+    mostrarToast('Sem permissao para excluir motorista.', 'error')
+    return
+  }
   await axios.delete(`${API_URL}/motoristas/${id}`)
   await carregarTudo()
 }
 
 const excluirVeiculo = async (id) => {
+  if (!podeGerenciarCadastros.value) {
+    mostrarToast('Sem permissao para excluir caminhao.', 'error')
+    return
+  }
   await axios.delete(`${API_URL}/veiculos/${id}`)
   await carregarTudo()
 }
 
 const abrirIndisponibilidadeVeiculo = (veiculo) => {
+  if (!podeVerCaminhoes.value) return
   veiculoIndisponibilidadeAberto.value = veiculo
   motivoIndisponibilidadeVeiculo.value = veiculo.motivo_indisponibilidade || ''
 }
@@ -1557,6 +1809,7 @@ const fecharIndisponibilidadeVeiculo = () => {
 }
 
 const confirmarIndisponibilidadeVeiculo = async () => {
+  if (!podeVerCaminhoes.value) return
   if (!veiculoIndisponibilidadeAberto.value) return
   const motivo = motivoIndisponibilidadeVeiculo.value.trim()
   if (!motivo) {
@@ -1575,6 +1828,7 @@ const confirmarIndisponibilidadeVeiculo = async () => {
 }
 
 const liberarVeiculo = async (veiculo) => {
+  if (!podeVerCaminhoes.value) return
   await salvarComFeedback('Caminhão liberado para uso.', async () => {
     await axios.put(`${API_URL}/veiculos/${veiculo.id}`, {
       ativo: true,
@@ -1585,6 +1839,7 @@ const liberarVeiculo = async (veiculo) => {
 }
 
 const salvarObservacaoEstadoVeiculo = async (veiculo) => {
+  if (!podeVerCaminhoes.value) return
   if (!veiculo?.id) return
   await salvarComFeedback('Estado do caminhão salvo.', async () => {
     await axios.put(`${API_URL}/veiculos/${veiculo.id}`, {
@@ -1595,16 +1850,19 @@ const salvarObservacaoEstadoVeiculo = async (veiculo) => {
 }
 
 const excluirEmpresa = async (id) => {
+  if (!podeGerenciarCadastros.value) return
   await axios.delete(`${API_URL}/empresas/${id}`)
   await carregarTudo()
 }
 
 const excluirFornecedor = async (id) => {
+  if (!podeGerenciarCadastros.value) return
   await axios.delete(`${API_URL}/fornecedores/${id}`)
   await carregarTudo()
 }
 
 const excluirPrestadorServico = async (id) => {
+  if (!podeGerenciarCadastros.value) return
   await axios.delete(`${API_URL}/prestadores-servicos/${id}`)
   await carregarTudo()
 }
@@ -1798,18 +2056,57 @@ const periodoExportacaoConcluidos = () => {
   return params.toString()
 }
 
-const exportarConcluidos = () => {
-  const query = periodoExportacaoConcluidos()
-  const url = `${API_URL}/fretes/concluidos/exportar${query ? `?${query}` : ''}`
-  window.open(url, '_blank')
+const baixarArquivoAutenticado = async (url, nomeArquivo) => {
+  if (!authState.token) {
+    mostrarToast('Sessao expirada. Faca login novamente.', 'error')
+    await sairSistema()
+    return
+  }
+
+  const resposta = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${authState.token}`,
+    },
+  })
+
+  if (!resposta.ok) {
+    throw new Error('Falha ao baixar arquivo')
+  }
+
+  const blob = await resposta.blob()
+  const link = document.createElement('a')
+  link.href = window.URL.createObjectURL(blob)
+  link.download = nomeArquivo
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(link.href)
 }
 
-const exportarHistoricoMotoristas = () => {
+const exportarConcluidos = async () => {
+  const query = periodoExportacaoConcluidos()
+  const url = `${API_URL}/fretes/concluidos/exportar${query ? `?${query}` : ''}`
+  try {
+    await baixarArquivoAutenticado(url, 'fretes-concluidos.xlsx')
+  } catch (error) {
+    mostrarToast('Nao foi possivel exportar os concluidos.', 'error')
+  }
+}
+
+const exportarHistoricoMotoristas = async () => {
   const url = `${API_URL}/motoristas/historico/exportar`
-  window.open(url, '_blank')
+  try {
+    await baixarArquivoAutenticado(url, 'fretes-motoristas-controle.xlsx')
+  } catch (error) {
+    mostrarToast('Nao foi possivel exportar o historico.', 'error')
+  }
 }
 
 const excluirConcluidosFiltrados = async () => {
+  if (!podeEditarConcluidos.value) {
+    mostrarToast('Sem permissao para excluir concluidos.', 'error')
+    return
+  }
   const total = fretesConcluidosFiltrados.value.length
   if (total === 0) {
     mostrarToast('Não há fretes concluídos neste filtro.', 'error')
@@ -1864,6 +2161,26 @@ const viewState = reactive({
   statusFiltroFrete,
   router,
   route,
+  authState,
+  usuarioLogado,
+  cargoUsuario,
+  ehAdmin,
+  ehControle,
+  ehMotorista,
+  podeEditarFretes,
+  podeMoverStatusFrete,
+  podeEditarConcluidos,
+  podeGerenciarCadastros,
+  podeVerRelatoriosMotoristas,
+  podeVerCaminhoes,
+  podeVerFornecedores,
+  podeVerPrestadores,
+  podeCriarFrete,
+  mostrarAlocacaoCompleta,
+  usuariosSistema,
+  usuarioSistemaEditandoId,
+  novoUsuarioSistema,
+  modoLogin,
   paginaPorRota,
   rotaPorPagina,
   carregando,
@@ -1932,6 +2249,7 @@ const viewState = reactive({
   paginas,
   paginaAtual,
   navegarParaPagina,
+  sairSistema,
   selecionarCadastroAtivo,
   sincronizarRotaComEstado,
   abrirPagina,
@@ -2020,6 +2338,7 @@ const viewState = reactive({
   limparEmpresa,
   limparFornecedor,
   limparPrestadorServico,
+  limparUsuarioSistema,
   limparFormularioFrete,
   abrirNovoFrete,
   cancelarEdicaoFrete,
@@ -2029,11 +2348,13 @@ const viewState = reactive({
   editarEmpresa,
   editarFornecedor,
   editarPrestadorServico,
+  editarUsuarioSistema,
   cadastrarMotorista,
   cadastrarVeiculo,
   cadastrarEmpresa,
   cadastrarFornecedor,
   cadastrarPrestadorServico,
+  cadastrarUsuarioSistema,
   buscarCepEmpresa,
   buscarCepFornecedor,
   buscarCepPrestadorServico,
@@ -2111,19 +2432,38 @@ watch(checklistToken, (token) => {
 watch(() => [route.path, route.query.cadastro, modoChecklist.value], sincronizarRotaComEstado, { immediate: true })
 
 watch(modoChecklist, (emChecklist, estavaEmChecklist) => {
-  if (!emChecklist && estavaEmChecklist) {
+  if (!emChecklist && estavaEmChecklist && !modoLogin.value) {
     carregarTudo()
   }
 })
 
+watch(modoLogin, (emLogin, estavaEmLogin) => {
+  if (!emLogin && estavaEmLogin) {
+    carregarTudo()
+  }
+})
+
+watch(cargoUsuario, (cargo) => {
+  if (!cargo) return
+  if (!rotaPermitidaParaCargo(route.path, cargo)) {
+    router.replace(rotaInicialUsuario.value).catch(() => {})
+  }
+})
+
 onMounted(() => {
-  if (!modoChecklist.value) carregarTudo()
+  if (!modoChecklist.value && !modoLogin.value) carregarTudo()
 })
 </script>
 
 <template>
   <main v-if="modoChecklist" class="checklist-public">
     <ChecklistPublicView :state="viewState" />
+  </main>
+
+  <main v-else-if="modoLogin" class="login-shell">
+    <RouterView v-slot="{ Component }">
+      <component :is="Component" :state="viewState" />
+    </RouterView>
   </main>
 
   <main v-else class="app-shell" :class="{ 'sidebar-collapsed': sidebarRecolhida }">
@@ -2149,40 +2489,54 @@ onMounted(() => {
         </button>
       </div>
 
-      <nav class="sidebar-nav" aria-label="Navegação principal">
+      <nav class="sidebar-nav" aria-label="Navegacao principal">
         <button title="Fretes" :class="{ active: aba === 'fretes' }" type="button" @click="abrirPagina('fretes')">
           <span class="nav-icon"><img :src="iconFretes" alt="" /></span>
           <span><strong>Fretes</strong><small>FRETES</small></span>
         </button>
-        <button title="Concluídos" :class="{ active: aba === 'concluidos' }" type="button" @click="abrirPagina('concluidos')">
+        <button
+          v-if="ehAdmin || ehControle"
+          title="Concluidos"
+          :class="{ active: aba === 'concluidos' }"
+          type="button"
+          @click="abrirPagina('concluidos')"
+        >
           <span class="nav-icon"><img :src="iconConcluidos" alt="" /></span>
-          <span><strong>Concluídos</strong><small>CONCLUÍDOS</small></span>
+          <span><strong>Concluidos</strong><small>CONCLUIDOS</small></span>
         </button>
-        <button title="Caminhões" :class="{ active: aba === 'caminhoes' }" type="button" @click="abrirPagina('caminhoes')">
+        <button v-if="podeVerCaminhoes" title="Caminhoes" :class="{ active: aba === 'caminhoes' }" type="button" @click="abrirPagina('caminhoes')">
           <span class="nav-icon"><img :src="iconCaminhao" alt="" /></span>
-          <span><strong>Caminhões</strong><small>CAMINHÃO</small></span>
+          <span><strong>Caminhoes</strong><small>CAMINHAO</small></span>
         </button>
-        <button title="Motoristas" :class="{ active: aba === 'relatorios' }" type="button" @click="abrirPagina('relatorios')">
+        <button v-if="podeVerRelatoriosMotoristas" title="Motoristas" :class="{ active: aba === 'relatorios' }" type="button" @click="abrirPagina('relatorios')">
           <span class="nav-icon"><img :src="iconMotorista" alt="" /></span>
           <span><strong>Motoristas</strong><small>MOTORISTA</small></span>
         </button>
-        <button title="Novo frete" :class="{ active: aba === 'novo-frete' }" type="button" @click="abrirNovoFrete">
+        <button v-if="podeCriarFrete" title="Novo frete" :class="{ active: aba === 'novo-frete' }" type="button" @click="abrirNovoFrete">
           <span class="nav-icon"><img :src="iconCriarFrete" alt="" /></span>
           <span><strong>Novo frete</strong><small>CRIAR FRETE</small></span>
         </button>
-        <button title="Cadastros" :class="{ active: aba === 'cadastros' }" type="button" @click="abrirPagina('cadastros', 'motoristas')">
+        <button v-if="podeGerenciarCadastros" title="Cadastros" :class="{ active: aba === 'cadastros' }" type="button" @click="abrirPagina('cadastros', 'motoristas')">
           <span class="nav-icon"><img :src="iconCadastro" alt="" /></span>
           <span><strong>Cadastros</strong><small>CADASTRO</small></span>
         </button>
-        <button title="Fornecedores" :class="{ active: aba === 'fornecedores' }" type="button" @click="abrirPagina('fornecedores')">
+        <button v-if="podeVerFornecedores" title="Fornecedores" :class="{ active: aba === 'fornecedores' }" type="button" @click="abrirPagina('fornecedores')">
           <span class="nav-icon"><img :src="iconFornecedores" alt="" /></span>
           <span><strong>Fornecedores</strong><small>FORNECEDOR</small></span>
         </button>
-        <button title="Prestadores" :class="{ active: aba === 'prestadores-servicos' }" type="button" @click="abrirPagina('prestadores-servicos')">
+        <button v-if="podeVerPrestadores" title="Prestadores" :class="{ active: aba === 'prestadores-servicos' }" type="button" @click="abrirPagina('prestadores-servicos')">
           <span class="nav-icon"><img :src="iconPrestadores" alt="" /></span>
-          <span><strong>Prestadores</strong><small>SERVIÇOS</small></span>
+          <span><strong>Prestadores</strong><small>SERVICOS</small></span>
         </button>
       </nav>
+
+      <div class="sidebar-user" v-if="usuarioLogado">
+        <div>
+          <strong>{{ usuarioLogado.nome }}</strong>
+          <small>{{ cargoUsuario }}</small>
+        </div>
+        <button class="secondary compact-button" type="button" @click="sairSistema">Sair</button>
+      </div>
 
       <button
         class="sidebar-collapse"

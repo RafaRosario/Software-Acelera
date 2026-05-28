@@ -23,6 +23,8 @@ const {
   copiarAtualizacaoEdscha,
   copiarMensagem,
   dataHoraChecklistFrete,
+  ehAdmin,
+  ehControle,
   editarFrete,
   empresasClientes,
   encerrarArrastoFrete,
@@ -52,6 +54,9 @@ const {
   motoristas,
   moverFreteParaStatus,
   nomeMotorista,
+  podeCriarFrete,
+  podeEditarFretes,
+  podeMoverStatusFrete,
   placaVeiculo,
   pontosMensagemFrete,
   rotaCompactaFrete,
@@ -68,6 +73,7 @@ const {
   subtituloStatusKanban,
   textoAtrasoFrete,
   totais,
+  mostrarAlocacaoCompleta,
   veiculos,
 } = toRefs(state)
 </script>
@@ -80,7 +86,7 @@ const {
           <p>Fretes cadastrados, alocação e status da viagem.</p>
         </div>
         <div class="freight-toolbar-controls">
-          <button class="update-button" type="button" @click="copiarAtualizacaoEdscha">
+          <button v-if="ehAdmin || ehControle" class="update-button" type="button" @click="copiarAtualizacaoEdscha">
             Copiar atualização Edscha
           </button>
           <div class="freight-quick-filters">
@@ -159,8 +165,8 @@ const {
             </div>
             <span class="overdue-days">{{ textoAtrasoFrete(frete) }}</span>
             <div class="overdue-row-actions">
-              <button class="secondary compact-button" type="button" @click="abrirMenuStatusFrete($event, frete)">Mover status</button>
-              <button class="secondary compact-button" type="button" @click="editarFrete(frete)">Editar</button>
+              <button v-if="podeMoverStatusFrete" class="secondary compact-button" type="button" @click="abrirMenuStatusFrete($event, frete)">Mover status</button>
+              <button v-if="podeCriarFrete" class="secondary compact-button" type="button" @click="editarFrete(frete)">Editar</button>
               <button class="secondary compact-button" type="button" @click="abrirWhatsApp(frete)">WhatsApp</button>
             </div>
           </article>
@@ -191,13 +197,13 @@ const {
               :key="frete.id"
               class="freight-card kanban-card"
               :class="{ dragging: freteArrastandoId === frete.id, expanded: freteAbertoId === frete.id, overdue: freteEstaAtrasado(frete) }"
-              draggable="true"
+              :draggable="podeMoverStatusFrete"
               role="button"
               tabindex="0"
               @dragstart="iniciarArrastoFrete($event, frete)"
               @dragend="encerrarArrastoFrete"
               @click="abrirFreteDetalhe(frete.id)"
-              @contextmenu.prevent.stop="abrirMenuStatusFrete($event, frete)"
+              @contextmenu.prevent.stop="podeMoverStatusFrete ? abrirMenuStatusFrete($event, frete) : null"
               @keydown.enter.prevent="abrirFreteDetalhe(frete.id)"
               @keydown.space.prevent="abrirFreteDetalhe(frete.id)"
             >
@@ -333,42 +339,42 @@ const {
                 <div class="modal-allocation-grid">
                   <label class="field">
                     Motorista
-                    <select v-model="freteDetalhe.motorista_id" @change="salvarEscalaAutomaticamente(freteDetalhe)">
+                    <select v-model="freteDetalhe.motorista_id" :disabled="!mostrarAlocacaoCompleta" @change="salvarEscalaAutomaticamente(freteDetalhe)">
                       <option :value="null">Selecionar</option>
                       <option v-for="motorista in motoristas" :key="motorista.id" :value="motorista.id">{{ motorista.nome }}</option>
                     </select>
                   </label>
                   <label class="field">
                     Caminhão
-                    <select v-model="freteDetalhe.veiculo_id" @change="salvarEscalaAutomaticamente(freteDetalhe)">
+                    <select v-model="freteDetalhe.veiculo_id" :disabled="!mostrarAlocacaoCompleta" @change="salvarEscalaAutomaticamente(freteDetalhe)">
                       <option :value="null">Selecionar</option>
                       <option v-for="veiculo in veiculos" :key="veiculo.id" :value="veiculo.id">{{ veiculo.placa }} - {{ veiculo.tipo }}</option>
                     </select>
                   </label>
                   <label class="field">
                     Valor do serviço
-                    <input v-model="freteDetalhe.valor_servico" type="number" min="0" step="0.01" placeholder="Opcional" @change="salvarValorFrete(freteDetalhe)" />
+                    <input v-model="freteDetalhe.valor_servico" :disabled="!podeEditarFretes" type="number" min="0" step="0.01" placeholder="Opcional" @change="salvarValorFrete(freteDetalhe)" />
                   </label>
                   <label class="field">
                     Nota fiscal
-                    <input v-model="freteDetalhe.nota_fiscal" placeholder="Opcional" @change="salvarNotaFiscalFrete(freteDetalhe)" />
+                    <input v-model="freteDetalhe.nota_fiscal" :disabled="!podeEditarFretes" placeholder="Opcional" @change="salvarNotaFiscalFrete(freteDetalhe)" />
                   </label>
                 </div>
               </div>
 
               <div class="actions freight-detail-actions">
-                <button class="secondary status-move-button" type="button" @click="abrirMenuStatusFrete($event, freteDetalhe)">Mover status</button>
-                <button class="secondary" type="button" @click="editarFrete(freteDetalhe)">Editar frete</button>
+                <button v-if="podeMoverStatusFrete" class="secondary status-move-button" type="button" @click="abrirMenuStatusFrete($event, freteDetalhe)">Mover status</button>
+                <button v-if="podeCriarFrete" class="secondary" type="button" @click="editarFrete(freteDetalhe)">Editar frete</button>
                 <button class="secondary" type="button" @click="copiarMensagem(freteDetalhe)">Copiar mensagem</button>
                 <button class="secondary" type="button" @click="abrirWhatsApp(freteDetalhe)">WhatsApp</button>
-                <button class="danger" type="button" @click="excluirFrete(freteDetalhe.id)">Excluir</button>
+                <button v-if="podeCriarFrete" class="danger" type="button" @click="excluirFrete(freteDetalhe.id)">Excluir</button>
               </div>
             </aside>
           </div>
         </section>
       </div>
 
-      <div v-if="menuStatusFrete.aberto" class="kanban-context-backdrop" @click="fecharMenuStatusFrete" @contextmenu.prevent="fecharMenuStatusFrete">
+      <div v-if="menuStatusFrete.aberto && podeMoverStatusFrete" class="kanban-context-backdrop" @click="fecharMenuStatusFrete" @contextmenu.prevent="fecharMenuStatusFrete">
         <div
           class="kanban-context-menu"
           :style="{ left: `${menuStatusFrete.x}px`, top: `${menuStatusFrete.y}px`, maxHeight: `${menuStatusFrete.maxHeight}px` }"
