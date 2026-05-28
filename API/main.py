@@ -309,13 +309,13 @@ def preparar_banco():
             )
             conexao.execute(
                 text(
-                    "UPDATE usuarios SET criado_em = :agora WHERE criado_em IS NULL OR criado_em = ''"
+                    "UPDATE usuarios SET criado_em = :agora WHERE criado_em IS NULL"
                 ),
                 {"agora": agora},
             )
             conexao.execute(
                 text(
-                    "UPDATE usuarios SET atualizado_em = :agora WHERE atualizado_em IS NULL OR atualizado_em = ''"
+                    "UPDATE usuarios SET atualizado_em = :agora WHERE atualizado_em IS NULL"
                 ),
                 {"agora": agora},
             )
