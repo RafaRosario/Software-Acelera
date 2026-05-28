@@ -133,6 +133,7 @@ class Frete(Base):
     checklist_oleo = Column(Boolean, default=False)
     checklist_avarias_externas = Column(Boolean, default=False)
     checklist_avarias_internas = Column(Boolean, default=False)
+    checklist_luzes = Column(Boolean, default=False)
     checklist_confirmado = Column(Boolean, default=False)
     checklist_confirmado_em = Column(DateTime, nullable=True)
     checklist_observacoes = Column(Text, nullable=True)

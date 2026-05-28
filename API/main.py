@@ -51,6 +51,14 @@ JWT_ALGORITMO = "HS256"
 JWT_SECRET = os.getenv("ACELERA_JWT_SECRET", "acelera-dev-secret-altere-em-producao")
 JWT_EXPIRA_HORAS = max(1, int(os.getenv("ACELERA_JWT_EXPIRE_HOURS", "12")))
 SENHA_PBKDF2_ITERACOES = max(120_000, int(os.getenv("ACELERA_PASSWORD_ITERATIONS", "240000")))
+CORS_ORIGINS = [
+    origem.strip()
+    for origem in os.getenv(
+        "ACELERA_CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000",
+    ).split(",")
+    if origem.strip()
+]
 
 ROTAS_PUBLICAS = {"/", "/docs", "/redoc", "/openapi.json", "/auth/login"}
 ROTAS_PUBLICAS_PREFIXO = ("/checklists/",)
@@ -218,6 +226,7 @@ def preparar_banco():
             "checklist_oleo": "ALTER TABLE fretes ADD COLUMN checklist_oleo BOOLEAN DEFAULT 0",
             "checklist_avarias_externas": "ALTER TABLE fretes ADD COLUMN checklist_avarias_externas BOOLEAN DEFAULT 0",
             "checklist_avarias_internas": "ALTER TABLE fretes ADD COLUMN checklist_avarias_internas BOOLEAN DEFAULT 0",
+            "checklist_luzes": "ALTER TABLE fretes ADD COLUMN checklist_luzes BOOLEAN DEFAULT 0",
             "checklist_confirmado": "ALTER TABLE fretes ADD COLUMN checklist_confirmado BOOLEAN DEFAULT 0",
             "checklist_confirmado_em": "ALTER TABLE fretes ADD COLUMN checklist_confirmado_em DATETIME",
             "checklist_observacoes": "ALTER TABLE fretes ADD COLUMN checklist_observacoes TEXT",
@@ -453,7 +462,7 @@ app = FastAPI(title="API Acelera Transportes")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -545,6 +554,7 @@ def resposta_checklist_frete(frete: models.Frete) -> dict:
         "oleo": bool(frete.checklist_oleo),
         "avarias_externas": bool(frete.checklist_avarias_externas),
         "avarias_internas": bool(frete.checklist_avarias_internas),
+        "luzes": bool(frete.checklist_luzes),
         "confirmado": bool(frete.checklist_confirmado),
         "confirmado_em": frete.checklist_confirmado_em,
         "observacoes": frete.checklist_observacoes,
@@ -1275,6 +1285,7 @@ def confirmar_checklist_frete(token: str, checklist: schemas.ChecklistFreteUpdat
     frete.checklist_oleo = checklist.oleo
     frete.checklist_avarias_externas = checklist.avarias_externas
     frete.checklist_avarias_internas = checklist.avarias_internas
+    frete.checklist_luzes = checklist.luzes
     frete.checklist_confirmado = True
     frete.checklist_confirmado_em = datetime.now()
     frete.checklist_observacoes = checklist.observacoes

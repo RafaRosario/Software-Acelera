@@ -261,6 +261,7 @@ class FreteResponse(FreteBase):
     checklist_oleo: bool = False
     checklist_avarias_externas: bool = False
     checklist_avarias_internas: bool = False
+    checklist_luzes: bool = False
     checklist_confirmado: bool = False
     checklist_confirmado_em: Optional[datetime] = None
     checklist_observacoes: Optional[str] = None
@@ -317,6 +318,7 @@ class ChecklistFreteResponse(BaseModel):
     oleo: bool = False
     avarias_externas: bool = False
     avarias_internas: bool = False
+    luzes: bool = False
     confirmado: bool = False
     confirmado_em: Optional[datetime] = None
     observacoes: Optional[str] = None
@@ -327,6 +329,7 @@ class ChecklistFreteUpdate(BaseModel):
     oleo: bool = False
     avarias_externas: bool = False
     avarias_internas: bool = False
+    luzes: bool = False
     observacoes: Optional[str] = None
 
 class MotoristaComContagem(MotoristaResponse):

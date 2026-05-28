@@ -138,14 +138,16 @@ const checklistResposta = ref({
   oleo: null,
   avarias_externas: null,
   avarias_internas: null,
+  luzes: null,
   observacoes: '',
 })
 const itensChecklistCaminhao = [
-  { chave: 'tacografo', rotulo: 'Tacógrafo' },
+  { chave: 'tacografo', rotulo: 'Tac\u00F3grafo' },
+  { chave: 'oleo', rotulo: '\u00D3leo' },
   { chave: 'pneus', rotulo: 'Pneus' },
-  { chave: 'oleo', rotulo: 'Óleo' },
-  { chave: 'avarias_externas', rotulo: 'Avarias externas' },
   { chave: 'avarias_internas', rotulo: 'Avarias internas' },
+  { chave: 'avarias_externas', rotulo: 'Avarias externas' },
+  { chave: 'luzes', rotulo: 'Luzes' },
 ]
 const respostaChecklistVazia = () => ({
   tacografo: null,
@@ -153,6 +155,7 @@ const respostaChecklistVazia = () => ({
   oleo: null,
   avarias_externas: null,
   avarias_internas: null,
+  luzes: null,
   observacoes: '',
 })
 
@@ -223,35 +226,35 @@ const novoFrete = ref(criarFormularioFreteVazio())
 
 const paginas = {
   fretes: {
-    titulo: 'Fretes',
+    titulo: 'Conclu\\u00EDdos',
     resumo: 'FRETES',
   },
   concluidos: {
-    titulo: 'Concluídos',
-    resumo: 'CONCLUÍDOS',
+    titulo: 'Conclu\\u00EDdos',
+    resumo: 'CONCLUÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂDOS',
   },
   caminhoes: {
-    titulo: 'Caminhões',
-    resumo: 'CAMINHÃO',
+    titulo: 'Conclu\\u00EDdos',
+    resumo: 'CAMINHÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O',
   },
   relatorios: {
-    titulo: 'Motoristas',
+    titulo: 'Conclu\\u00EDdos',
     resumo: 'MOTORISTA',
   },
   'novo-frete': {
-    titulo: 'Novo frete',
+    titulo: 'Conclu\\u00EDdos',
     resumo: 'CRIAR FRETE',
   },
   cadastros: {
-    titulo: 'Cadastros',
+    titulo: 'Conclu\\u00EDdos',
     resumo: 'CADASTRO',
   },
   fornecedores: {
-    titulo: 'Fornecedores',
+    titulo: 'Conclu\\u00EDdos',
     resumo: 'FORNECEDORES',
   },
   'prestadores-servicos': {
-    titulo: 'Prestadores de serviços',
+    titulo: 'Conclu\\u00EDdos',
     resumo: 'PRESTADORES',
   },
 }
@@ -259,7 +262,7 @@ const paginas = {
 const paginaAtual = computed(() => {
   if (aba.value === 'novo-frete' && freteEditandoId.value) {
     return {
-      titulo: 'Editar frete',
+      titulo: 'Conclu\\u00EDdos',
       resumo: 'CRIAR FRETE',
     }
   }
@@ -452,7 +455,7 @@ function freteEstaAtrasado(frete) {
 
 const textoAtrasoFrete = (frete) => {
   const dias = diasAbertoFrete(frete)
-  return dias === 1 ? 'Aberto há 1 dia' : `Aberto há ${dias} dias`
+  return dias === 1 ? 'Aberto hÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ 1 dia' : `Aberto hÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ ${dias} dias`
 }
 
 function dataConferePeriodoFretes(dataFrete) {
@@ -764,7 +767,7 @@ const telefoneMotorista = (id) => {
   if (telefone) return telefone
   return ''
 }
-const placaVeiculo = (id) => veiculos.value.find((veiculo) => veiculo.id === id)?.placa || 'Sem caminhão'
+const placaVeiculo = (id) => veiculos.value.find((veiculo) => veiculo.id === id)?.placa || 'Sem caminhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o'
 const veiculoPorId = (id) => veiculos.value.find((veiculo) => veiculo.id === id)
 
 const pontosColetaFrete = (frete) => {
@@ -912,7 +915,7 @@ const moverFreteParaStatus = async (frete, status) => {
   }
   if (!frete) return
   if (!statusDisponiveisFrete(frete).includes(status)) {
-    mostrarToast('Este status não existe para este frete.', 'error')
+    mostrarToast('Este status nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o existe para este frete.', 'error')
     fecharMenuStatusFrete()
     return
   }
@@ -927,15 +930,15 @@ const moverFreteParaStatus = async (frete, status) => {
 }
 
 const resumoStatusEdscha = (frete) => {
-  if (frete.status === STATUS_AGUARDANDO) return 'aguardando horário'
+  if (frete.status === STATUS_AGUARDANDO) return 'aguardando hor\\u00E1rio'
   if (frete.status === STATUS_CAMINHO_P1) return `a caminho ${frete.origem}`
   if (frete.status === STATUS_COLETADO_P1) return `aguardando coleta ${frete.origem}`
   if (frete.status === STATUS_CAMINHO_PONTO_ADICIONAL) return 'coleta realizada, a caminho ponto adicional'
-  if (statusEhPontoAdicional(frete.status)) return 'pontos adicionais coletados, em direção ao destino final'
+  if (statusEhPontoAdicional(frete.status)) return 'pontos adicionais coletados, em direÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o ao destino final'
   if (frete.status === STATUS_CAMINHO_DESTINO) return `coletado ${frete.origem}, a caminho do destino`
   if (frete.status === STATUS_CHEGADA_DESTINO) return `aguardando para descarregar ${frete.destino}`
   if (frete.status === STATUS_RETORNANDO) return 'retornando'
-  if (statusEhConcluido(frete.status)) return '✅'
+  if (statusEhConcluido(frete.status)) return '\\u2705'
   return statusVisualFrete(frete.status).toLowerCase()
 }
 
@@ -949,7 +952,7 @@ const gerarAtualizacaoEdscha = () => {
   const fretesAtualizacao = fretesFiltrados.value.filter((frete) => frete.status !== STATUS_CANCELADA && !freteEhRetorno(frete))
 
   if (fretesAtualizacao.length === 0) {
-    mostrarToast('Não há fretes para atualizar neste filtro.', 'error')
+    mostrarToast('NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o hÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ fretes para atualizar neste filtro.', 'error')
     return ''
   }
 
@@ -960,7 +963,7 @@ const copiarAtualizacaoEdscha = async () => {
   const mensagem = gerarAtualizacaoEdscha()
   if (!mensagem) return
   await navigator.clipboard.writeText(mensagem)
-  mostrarToast('Atualização Edscha copiada.')
+  mostrarToast('AtualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o Edscha copiada.')
 }
 
 const normalizarAlocacao = (frete) => {
@@ -1035,7 +1038,7 @@ const salvarComFeedback = async (mensagem, acao) => {
     await acao()
     mostrarToast(mensagem)
   } catch (error) {
-    mostrarToast('Não foi possível salvar. Tente novamente.', 'error')
+    mostrarToast('NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o foi possÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel salvar. Tente novamente.', 'error')
   }
 }
 
@@ -1315,12 +1318,12 @@ const cadastrarMotorista = async () => {
   aplicarMascaraCpfMotorista()
 
   if (!rgValido(novoMotorista.value.rg)) {
-    mostrarToast('RG inválido. Confira o número informado.', 'error')
+    mostrarToast('RG invÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡lido. Confira o nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºmero informado.', 'error')
     return
   }
 
   if (!cpfValido(novoMotorista.value.cpf)) {
-    mostrarToast('CPF inválido. Confira os dígitos.', 'error')
+    mostrarToast('CPF invÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡lido. Confira os dÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­gitos.', 'error')
     return
   }
 
@@ -1349,16 +1352,16 @@ const cadastrarVeiculo = async () => {
       await axios.put(`${API_URL}/veiculos/${veiculoEditandoId.value}`, payload)
       limparVeiculo()
       await carregarTudo()
-      mostrarToast('Caminhão atualizado com sucesso.')
+      mostrarToast('CaminhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o atualizado com sucesso.')
       return
     }
 
     await axios.post(`${API_URL}/veiculos/`, payload)
     limparVeiculo()
     await carregarTudo()
-    mostrarToast('Caminhão cadastrado com sucesso.')
+    mostrarToast('CaminhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o cadastrado com sucesso.')
   } catch (error) {
-    mostrarToast(error.response?.data?.detail || 'Não foi possível salvar o caminhão.', 'error')
+    mostrarToast(error.response?.data?.detail || 'NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o foi possÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel salvar o caminhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o.', 'error')
   }
 }
 
@@ -1394,7 +1397,7 @@ const cadastrarFornecedor = async () => {
   }
 
   if (!payload.nome || !payload.cep || !payload.cidade || !payload.marca) {
-    mostrarToast('Nome, CEP, cidade e marca do fornecedor são obrigatórios.', 'error')
+    mostrarToast('Nome, CEP, cidade e marca do fornecedor sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o obrigatÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rios.', 'error')
     return
   }
 
@@ -1412,7 +1415,7 @@ const cadastrarFornecedor = async () => {
     await carregarTudo()
     mostrarToast('Fornecedor cadastrado com sucesso.')
   } catch (error) {
-    mostrarToast(error.response?.data?.detail || 'Não foi possível salvar o fornecedor.', 'error')
+    mostrarToast(error.response?.data?.detail || 'NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o foi possÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel salvar o fornecedor.', 'error')
   }
 }
 
@@ -1434,7 +1437,7 @@ const cadastrarPrestadorServico = async () => {
   }
 
   if (!payload.nome || !payload.cep || !payload.cidade || !payload.tipo) {
-    mostrarToast('Nome, CEP, cidade e tipo do prestador são obrigatórios.', 'error')
+    mostrarToast('Nome, CEP, cidade e tipo do prestador sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o obrigatÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rios.', 'error')
     return
   }
 
@@ -1452,14 +1455,14 @@ const cadastrarPrestadorServico = async () => {
     await carregarTudo()
     mostrarToast('Prestador cadastrado com sucesso.')
   } catch (error) {
-    mostrarToast(error.response?.data?.detail || 'Não foi possível salvar o prestador.', 'error')
+    mostrarToast(error.response?.data?.detail || 'NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o foi possÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel salvar o prestador.', 'error')
   }
 }
 
 const buscarCepEmpresa = async () => {
   const cep = novaEmpresa.value.cep.replace(/\D/g, '')
   if (cep.length !== 8) {
-    erro.value = 'Informe um CEP com 8 dígitos.'
+    erro.value = 'Informe um CEP com 8 dÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­gitos.'
     return
   }
 
@@ -1468,7 +1471,7 @@ const buscarCepEmpresa = async () => {
   const dados = await response.json()
 
   if (dados.erro) {
-    erro.value = 'CEP não encontrado.'
+    erro.value = 'CEP nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o encontrado.'
     return
   }
 
@@ -1483,7 +1486,7 @@ const buscarCepEmpresa = async () => {
 const buscarCepFornecedor = async () => {
   const cep = (novoFornecedor.value.cep || '').replace(/\D/g, '')
   if (cep.length !== 8) {
-    erro.value = 'Informe um CEP com 8 dígitos.'
+    erro.value = 'Informe um CEP com 8 dÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­gitos.'
     return
   }
 
@@ -1492,7 +1495,7 @@ const buscarCepFornecedor = async () => {
   const dados = await response.json()
 
   if (dados.erro) {
-    erro.value = 'CEP não encontrado.'
+    erro.value = 'CEP nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o encontrado.'
     return
   }
 
@@ -1507,7 +1510,7 @@ const buscarCepFornecedor = async () => {
 const buscarCepPrestadorServico = async () => {
   const cep = (novoPrestadorServico.value.cep || '').replace(/\D/g, '')
   if (cep.length !== 8) {
-    erro.value = 'Informe um CEP com 8 dígitos.'
+    erro.value = 'Informe um CEP com 8 dÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­gitos.'
     return
   }
 
@@ -1516,7 +1519,7 @@ const buscarCepPrestadorServico = async () => {
   const dados = await response.json()
 
   if (dados.erro) {
-    erro.value = 'CEP não encontrado.'
+    erro.value = 'CEP nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o encontrado.'
     return
   }
 
@@ -1646,7 +1649,7 @@ const soltarFreteEmStatus = async (event, status) => {
   }
 
   if (!statusDisponiveisFrete(frete).includes(status)) {
-    mostrarToast('Este status não existe para este frete.', 'error')
+    mostrarToast('Este status nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o existe para este frete.', 'error')
     encerrarArrastoFrete()
     return
   }
@@ -1817,7 +1820,7 @@ const confirmarIndisponibilidadeVeiculo = async () => {
     return
   }
 
-  await salvarComFeedback('Caminhão marcado como indisponível.', async () => {
+  await salvarComFeedback('CaminhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o marcado como indisponÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel.', async () => {
     await axios.put(`${API_URL}/veiculos/${veiculoIndisponibilidadeAberto.value.id}`, {
       ativo: false,
       motivo_indisponibilidade: motivo,
@@ -1829,7 +1832,7 @@ const confirmarIndisponibilidadeVeiculo = async () => {
 
 const liberarVeiculo = async (veiculo) => {
   if (!podeVerCaminhoes.value) return
-  await salvarComFeedback('Caminhão liberado para uso.', async () => {
+  await salvarComFeedback('CaminhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o liberado para uso.', async () => {
     await axios.put(`${API_URL}/veiculos/${veiculo.id}`, {
       ativo: true,
       motivo_indisponibilidade: '',
@@ -1841,7 +1844,7 @@ const liberarVeiculo = async (veiculo) => {
 const salvarObservacaoEstadoVeiculo = async (veiculo) => {
   if (!podeVerCaminhoes.value) return
   if (!veiculo?.id) return
-  await salvarComFeedback('Estado do caminhão salvo.', async () => {
+  await salvarComFeedback('Estado do caminhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o salvo.', async () => {
     await axios.put(`${API_URL}/veiculos/${veiculo.id}`, {
       observacao_estado: (veiculo.observacao_estado || '').trim(),
     })
@@ -1887,13 +1890,14 @@ const carregarChecklistPublico = async () => {
       oleo: resposta.data.confirmado ? Boolean(resposta.data.oleo) : null,
       avarias_externas: resposta.data.confirmado ? Boolean(resposta.data.avarias_externas) : null,
       avarias_internas: resposta.data.confirmado ? Boolean(resposta.data.avarias_internas) : null,
+      luzes: resposta.data.confirmado ? Boolean(resposta.data.luzes) : null,
       observacoes: resposta.data.observacoes || '',
     }
     if (resposta.data.confirmado) {
-      checklistSucesso.value = 'Checklist já confirmado.'
+      checklistSucesso.value = 'Checklist jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ confirmado.'
     }
   } catch (error) {
-    checklistErro.value = 'Checklist não encontrado ou API indisponível.'
+    checklistErro.value = 'Checklist nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o encontrado ou API indisponÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel.'
   } finally {
     checklistCarregando.value = false
   }
@@ -1909,7 +1913,7 @@ const confirmarChecklistPublico = async () => {
   }
 
   if (checklistRespostaTemApontamento.value && !checklistResposta.value.observacoes.trim()) {
-    checklistErro.value = 'Informe uma observação para o item com problema.'
+    checklistErro.value = 'Informe uma observaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para o item com problema.'
     return
   }
 
@@ -1919,7 +1923,7 @@ const confirmarChecklistPublico = async () => {
     checklistPublico.value = resposta.data
     checklistSucesso.value = 'Checklist confirmado com sucesso.'
   } catch (error) {
-    checklistErro.value = 'Não foi possível confirmar o checklist.'
+    checklistErro.value = 'NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o foi possÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel confirmar o checklist.'
   } finally {
     checklistSalvando.value = false
   }
@@ -1938,6 +1942,7 @@ const checklistStatusFrete = (frete) => {
     oleo: frete.checklist_oleo,
     avarias_externas: frete.checklist_avarias_externas,
     avarias_internas: frete.checklist_avarias_internas,
+    luzes: frete.checklist_luzes,
   })
     ? 'Checklist com apontamento'
     : 'Checklist ok'
@@ -1957,14 +1962,14 @@ const dataHoraChecklistFrete = (frete) => {
 }
 
 const checklistCaminhaoMensagem = (frete, veiculo) => {
-  const tipo = veiculo?.tipo || frete.tipo_caminhao_necessario || 'caminhão'
+  const tipo = veiculo?.tipo || frete.tipo_caminhao_necessario || 'caminhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o'
   const placa = veiculo?.placa || placaVeiculo(frete.veiculo_id)
   const link = linkChecklistFrete(frete)
 
   return [
-    `Checklist caminhão ${tipo} - placa ${placa}`,
+    `Checklist caminhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o ${tipo} - placa ${placa}`,
     'Confirme a vistoria pelo link:',
-    link || 'Link do checklist ainda não gerado. Atualize o frete e copie a mensagem novamente.',
+    link || 'Link do checklist ainda nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o gerado. Atualize o frete e copie a mensagem novamente.',
   ].join('\n')
 }
 
@@ -2109,14 +2114,14 @@ const excluirConcluidosFiltrados = async () => {
   }
   const total = fretesConcluidosFiltrados.value.length
   if (total === 0) {
-    mostrarToast('Não há fretes concluídos neste filtro.', 'error')
+    mostrarToast('NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o hÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ fretes concluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­dos neste filtro.', 'error')
     return
   }
 
-  const confirmou = window.confirm(`Você deseja excluir todos os ${total} fretes concluídos deste filtro?`)
+  const confirmou = window.confirm(`VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª deseja excluir todos os ${total} fretes concluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­dos deste filtro?`)
   if (!confirmou) return
 
-  await salvarComFeedback('Fretes concluídos excluídos com sucesso.', async () => {
+  await salvarComFeedback('Fretes concluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­dos excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­dos com sucesso.', async () => {
     const query = periodoExportacaoConcluidos()
     await axios.delete(`${API_URL}/fretes/concluidos${query ? `?${query}` : ''}`)
     await carregarTudo()
@@ -2133,7 +2138,7 @@ const empresaPorNome = (nome) => empresasPorNome.value[nome]
 
 const enderecoPorNomeEmpresa = (nome) => {
   const empresa = empresaPorNome(nome)
-  return empresa ? enderecoEmpresa(empresa) : 'Endereço não cadastrado'
+  return empresa ? enderecoEmpresa(empresa) : 'EndereÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§o nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o cadastrado'
 }
 
 const pontosMensagemFrete = (frete) => {
@@ -2566,3 +2571,5 @@ onMounted(() => {
     </div>
   </main>
 </template>
+
+

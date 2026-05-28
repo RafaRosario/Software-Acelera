@@ -5189,6 +5189,25 @@ h3,
   text-decoration: underline;
 }
 
+/* Keep cadastro switch tabs visually consistent across all sections, including "Acessos". */
+.cadastro-switch {
+  align-items: stretch;
+  margin-top: 0;
+}
+
+.cadastro-switch button {
+  align-items: center;
+  box-sizing: border-box;
+  display: inline-flex;
+  font-size: 14px;
+  height: 40px;
+  justify-content: center;
+  line-height: 1.2;
+  min-height: 40px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
 .sidebar-user {
   align-items: center;
   background: color-mix(in srgb, var(--surface-soft) 85%, #fff);
