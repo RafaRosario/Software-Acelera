@@ -17,12 +17,21 @@ const rotasPermitidasPorCargo = {
   motorista: ['/fretes'],
 }
 
-export const API_URL = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '')
 export const authState = reactive({
   token: localStorage.getItem(TOKEN_STORAGE_KEY) || '',
   user: null,
   pronto: false,
 })
+
+const normalizarApiUrl = (valor) => {
+  const raw = String(valor || '').trim()
+  if (!raw) return 'http://127.0.0.1:8000'
+  if (/^https?:\/\//i.test(raw)) return raw.replace(/\/+$/, '')
+  if (/^(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/i.test(raw)) return `http://${raw}`.replace(/\/+$/, '')
+  return `https://${raw}`.replace(/\/+$/, '')
+}
+
+export const API_URL = normalizarApiUrl(import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000')
 
 const normalizarRota = (path) => {
   const rota = String(path || '').trim()
