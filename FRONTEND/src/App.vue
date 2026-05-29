@@ -226,35 +226,35 @@ const novoFrete = ref(criarFormularioFreteVazio())
 
 const paginas = {
   fretes: {
-    titulo: 'Conclu\\u00EDdos',
+    titulo: 'Concluídos',
     resumo: 'FRETES',
   },
   concluidos: {
-    titulo: 'Conclu\\u00EDdos',
+    titulo: 'Concluídos',
     resumo: 'CONCLUÍDOS',
   },
   caminhoes: {
-    titulo: 'Conclu\\u00EDdos',
+    titulo: 'Concluídos',
     resumo: 'CAMINHÃO',
   },
   relatorios: {
-    titulo: 'Conclu\\u00EDdos',
+    titulo: 'Concluídos',
     resumo: 'MOTORISTA',
   },
   'novo-frete': {
-    titulo: 'Conclu\\u00EDdos',
+    titulo: 'Concluídos',
     resumo: 'CRIAR FRETE',
   },
   cadastros: {
-    titulo: 'Conclu\\u00EDdos',
+    titulo: 'Concluídos',
     resumo: 'CADASTRO',
   },
   fornecedores: {
-    titulo: 'Conclu\\u00EDdos',
+    titulo: 'Concluídos',
     resumo: 'FORNECEDORES',
   },
   'prestadores-servicos': {
-    titulo: 'Conclu\\u00EDdos',
+    titulo: 'Concluídos',
     resumo: 'PRESTADORES',
   },
 }
@@ -262,7 +262,7 @@ const paginas = {
 const paginaAtual = computed(() => {
   if (aba.value === 'novo-frete' && freteEditandoId.value) {
     return {
-      titulo: 'Conclu\\u00EDdos',
+      titulo: 'Concluídos',
       resumo: 'CRIAR FRETE',
     }
   }
@@ -930,7 +930,7 @@ const moverFreteParaStatus = async (frete, status) => {
 }
 
 const resumoStatusEdscha = (frete) => {
-  if (frete.status === STATUS_AGUARDANDO) return 'aguardando hor\\u00E1rio'
+  if (frete.status === STATUS_AGUARDANDO) return 'aguardando horário'
   if (frete.status === STATUS_CAMINHO_P1) return `a caminho ${frete.origem}`
   if (frete.status === STATUS_COLETADO_P1) return `aguardando coleta ${frete.origem}`
   if (frete.status === STATUS_CAMINHO_PONTO_ADICIONAL) return 'coleta realizada, a caminho ponto adicional'
@@ -938,7 +938,7 @@ const resumoStatusEdscha = (frete) => {
   if (frete.status === STATUS_CAMINHO_DESTINO) return `coletado ${frete.origem}, a caminho do destino`
   if (frete.status === STATUS_CHEGADA_DESTINO) return `aguardando para descarregar ${frete.destino}`
   if (frete.status === STATUS_RETORNANDO) return 'retornando'
-  if (statusEhConcluido(frete.status)) return '\\u2705'
+  if (statusEhConcluido(frete.status)) return '✅'
   return statusVisualFrete(frete.status).toLowerCase()
 }
 
