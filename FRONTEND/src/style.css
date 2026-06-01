@@ -699,6 +699,256 @@ textarea:focus {
   flex: 0 0 auto;
 }
 
+.concluded-subnav {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.concluded-subnav button {
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+  flex: 0 0 auto;
+  line-height: 1;
+  min-height: 40px;
+  min-width: 148px;
+  white-space: nowrap;
+  padding: 8px 16px;
+  width: auto;
+}
+
+.concluded-subnav button.active {
+  background: var(--text);
+  border-color: var(--text);
+  color: #fff;
+}
+
+.concluded-suggestion-panel {
+  background: linear-gradient(135deg, #eef8ff 0%, #f7fcff 100%);
+  border: 1px solid #b7dcf6;
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.concluded-suggestion-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.concluded-suggestion-head strong {
+  color: #0f4f85;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.concluded-suggestion-head span {
+  color: #2b6a95;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.concluded-suggestion-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.concluded-suggestion-values span {
+  background: #ffffff;
+  border: 1px solid #c9e6fa;
+  border-radius: 8px;
+  color: #154f78;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 7px 9px;
+}
+
+.concluded-suggestion-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.concluded-suggestion-actions .suggestion-dismiss-button {
+  border-color: #9ecde9;
+  color: #2f668b;
+}
+
+.concluded-suggestion-actions .suggestion-apply-button {
+  background: #0f6fb2;
+  border-color: #0f6fb2;
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.concluded-suggestion-actions .suggestion-apply-button:hover {
+  background: #0d629d;
+  border-color: #0d629d;
+}
+
+.historico-valores-grid {
+  align-items: stretch;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.historico-toolbar {
+  margin-bottom: 6px;
+}
+
+.historico-search-field {
+  max-width: 420px;
+  width: 100%;
+}
+
+.historico-search-input {
+  min-height: 34px;
+  padding: 6px 10px;
+}
+
+.historico-valor-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.historico-valor-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.historico-valor-head strong {
+  color: var(--text);
+  display: block;
+  font-size: 15px;
+}
+
+.historico-valor-head small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.historico-rota {
+  align-items: center;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  padding: 8px 10px;
+}
+
+.historico-rota span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.historico-rota b {
+  color: var(--primary);
+}
+
+.historico-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.historico-flags span {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 6px 10px;
+}
+
+.historico-flags .flag-yes {
+  background: #e8f7ed;
+  border: 1px solid #bde6c8;
+  color: #17663a;
+}
+
+.historico-flags .flag-no {
+  background: #fff2e2;
+  border: 1px solid #ffd9ad;
+  color: #8b4d00;
+}
+
+.historico-inputs {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 8px;
+}
+
+.historico-inputs-actions {
+  align-items: end;
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+}
+
+.historico-inputs input {
+  min-height: 38px;
+  font-weight: 800;
+  padding: 8px 10px;
+}
+
+.historico-valor-footer {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+.historico-valor-footer small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.historico-valor-footer button,
+.historico-inputs-actions button {
+  font-size: 14px;
+  font-weight: 800;
+  min-height: 40px;
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+
+.historico-valor-footer button.secondary {
+  background: #eef4f0;
+  border: 1px solid #b9cdc1;
+  color: #1f3b2e;
+}
+
+.historico-valor-footer button.secondary:hover {
+  background: #e2ede7;
+}
+
 .cadastro-switch {
   border: 1px solid var(--line);
 }
@@ -4284,6 +4534,47 @@ h3,
   white-space: nowrap;
 }
 
+/* Prevent responsive/grid rules from stretching Cadastros tabs container. */
+.cadastro-switch {
+  align-content: flex-start;
+  display: flex !important;
+  grid-template-columns: none !important;
+  height: auto !important;
+}
+
+/* Hard lock for Cadastros page tab strip to keep same size in all tabs, including "Acessos". */
+.cadastro-switch--compact {
+  align-items: center !important;
+  box-sizing: border-box;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  grid-template-columns: none !important;
+  justify-content: flex-start;
+  margin-bottom: 12px !important;
+  min-height: 48px !important;
+  overflow-x: auto;
+  padding: 6px !important;
+}
+
+.cadastro-switch--compact button {
+  flex: 0 0 auto !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  min-width: 126px !important;
+}
+
+.acessos-layout {
+  align-items: start;
+}
+
+.acessos-layout .registry-form-card,
+.acessos-layout .registry-directory {
+  height: auto;
+  min-height: 0;
+}
+
 .overdue-days,
 .kanban-mini-details .overdue-chip {
   background: #fff4d8;
@@ -5191,8 +5482,18 @@ h3,
 
 /* Keep cadastro switch tabs visually consistent across all sections, including "Acessos". */
 .cadastro-switch {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  min-height: 0;
   align-items: stretch;
+  flex-wrap: nowrap;
+  margin-bottom: 12px;
   margin-top: 0;
+  overflow-x: auto;
+  padding: 8px;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
 }
 
 .cadastro-switch button {
@@ -5200,10 +5501,12 @@ h3,
   box-sizing: border-box;
   display: inline-flex;
   font-size: 14px;
-  height: 40px;
+  flex: 0 0 auto;
+  height: 38px;
   justify-content: center;
   line-height: 1.2;
-  min-height: 40px;
+  min-height: 38px;
+  min-width: 126px;
   padding: 0 12px;
   white-space: nowrap;
 }

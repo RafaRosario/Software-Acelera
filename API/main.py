@@ -118,9 +118,21 @@ def caminho_normalizado(path: str) -> str:
 
 def rota_publica(path: str) -> bool:
     caminho = caminho_normalizado(path)
-    if caminho in ROTAS_PUBLICAS:
-        return True
-    return any(caminho.startswith(prefixo) for prefixo in ROTAS_PUBLICAS_PREFIXO)
+    caminhos_para_validar = {caminho}
+
+    # Em producao, algumas configuracoes de proxy encaminham a API com prefixo /api.
+    # Aceitamos as mesmas rotas publicas com e sem esse prefixo.
+    if caminho.startswith("/api/"):
+        caminhos_para_validar.add(caminho[4:])
+    elif caminho == "/api":
+        caminhos_para_validar.add("/")
+
+    for caminho_item in caminhos_para_validar:
+        if caminho_item in ROTAS_PUBLICAS:
+            return True
+        if any(caminho_item.startswith(prefixo) for prefixo in ROTAS_PUBLICAS_PREFIXO):
+            return True
+    return False
 
 
 def rota_permitida(cargo: str, metodo: str, path: str) -> bool:
@@ -563,6 +575,57 @@ def resposta_checklist_frete(frete: models.Frete) -> dict:
 
 def pontos_adicionais_frete(frete: models.Frete) -> list[str]:
     return [ponto.strip() for ponto in (frete.empresas_coleta or "").split(",") if ponto and ponto.strip()]
+
+
+def tem_ponto_adicional_frete(frete: models.Frete) -> bool:
+    return len(pontos_adicionais_frete(frete)) > 0
+
+
+def chave_template_frete(frete: models.Frete) -> dict:
+    return {
+        "empresa_id": (frete.cliente or "").strip(),
+        "caminhao_contratado_id": (frete.tipo_caminhao_necessario or "").strip(),
+        "origem_id": (frete.origem or "").strip(),
+        "destino_id": (frete.destino or "").strip(),
+        "tem_retorno": bool(frete.retorno),
+        "tem_ponto_adicional": tem_ponto_adicional_frete(frete),
+    }
+
+
+def obter_template_valor_frete(db: Session, frete: models.Frete) -> Optional[models.FreteTemplateValor]:
+    chave = chave_template_frete(frete)
+    if not all([chave["empresa_id"], chave["caminhao_contratado_id"], chave["origem_id"], chave["destino_id"]]):
+        return None
+    return db.query(models.FreteTemplateValor).filter_by(**chave).first()
+
+
+def salvar_template_valor_frete(db: Session, frete: models.Frete) -> None:
+    if frete.valor_servico is None and frete.valor_retorno is None and frete.valor_ponto_adicional is None:
+        return
+
+    chave = chave_template_frete(frete)
+    if not all([chave["empresa_id"], chave["caminhao_contratado_id"], chave["origem_id"], chave["destino_id"]]):
+        return
+
+    template = db.query(models.FreteTemplateValor).filter_by(**chave).first()
+    if template is None:
+        template = models.FreteTemplateValor(
+            **chave,
+            valor_padrao=frete.valor_servico,
+            valor_retorno=frete.valor_retorno,
+            valor_ponto_adicional=frete.valor_ponto_adicional,
+            fonte="manual_confirmado",
+            qtd_usos=1,
+        )
+        db.add(template)
+        return
+
+    template.valor_padrao = frete.valor_servico
+    template.valor_retorno = frete.valor_retorno
+    template.valor_ponto_adicional = frete.valor_ponto_adicional
+    template.fonte = "manual_confirmado"
+    template.qtd_usos = (template.qtd_usos or 0) + 1
+    template.updated_at = datetime.utcnow()
 
 
 def montar_endereco_empresa(empresa: schemas.EmpresaCreate) -> str:
@@ -1432,12 +1495,58 @@ def atualizar_frete(frete_id: int, frete: schemas.FreteUpdate, db: Session = Dep
     return db_frete
 
 
+@app.get("/fretes/{frete_id}/sugestao-valor", response_model=schemas.FreteSugestaoValorResponse, tags=["Fretes"])
+def obter_sugestao_valor_frete(frete_id: int, db: Session = Depends(get_db)):
+    db_frete = obter_ou_404(db, models.Frete, frete_id, "Frete nao encontrado")
+    template = obter_template_valor_frete(db, db_frete)
+    if not template:
+        return {
+            "possui_sugestao": False,
+            "fonte": None,
+            "qtd_usos": 0,
+            "valor_servico": None,
+            "valor_retorno": None,
+            "valor_ponto_adicional": None,
+        }
+    return {
+        "possui_sugestao": True,
+        "fonte": template.fonte,
+        "qtd_usos": template.qtd_usos or 0,
+        "valor_servico": template.valor_padrao,
+        "valor_retorno": template.valor_retorno,
+        "valor_ponto_adicional": template.valor_ponto_adicional,
+    }
+
+
+@app.get("/fretes-templates/valores", response_model=list[schemas.FreteTemplateValorResponse], tags=["Fretes"])
+def listar_templates_valores_frete(db: Session = Depends(get_db)):
+    return (
+        db.query(models.FreteTemplateValor)
+        .order_by(models.FreteTemplateValor.updated_at.desc(), models.FreteTemplateValor.id.desc())
+        .all()
+    )
+
+
+@app.put("/fretes-templates/valores/{template_id}", response_model=schemas.FreteTemplateValorResponse, tags=["Fretes"])
+def atualizar_template_valor_frete(template_id: int, payload: schemas.FreteTemplateValorUpdate, db: Session = Depends(get_db)):
+    template = obter_ou_404(db, models.FreteTemplateValor, template_id, "Template de valor nao encontrado")
+    template.valor_padrao = payload.valor_padrao
+    template.valor_retorno = payload.valor_retorno
+    template.valor_ponto_adicional = payload.valor_ponto_adicional
+    template.fonte = "manual_confirmado"
+    template.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(template)
+    return template
+
+
 @app.put("/fretes/{frete_id}/valor", response_model=schemas.FreteResponse, tags=["Fretes"])
 def atualizar_valor_frete(frete_id: int, valor: schemas.FreteValorUpdate, db: Session = Depends(get_db)):
     db_frete = obter_ou_404(db, models.Frete, frete_id, "Frete nao encontrado")
     db_frete.valor_servico = valor.valor_servico
     db_frete.valor_retorno = valor.valor_retorno
     db_frete.valor_ponto_adicional = valor.valor_ponto_adicional
+    salvar_template_valor_frete(db, db_frete)
     db.commit()
     db.refresh(db_frete)
     return db_frete

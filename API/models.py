@@ -144,3 +144,32 @@ class Frete(Base):
     motorista = relationship("Motorista")
     veiculo = relationship("Veiculo")
     frete_principal = relationship("Frete", remote_side=[id])
+
+
+class FreteTemplateValor(Base):
+    __tablename__ = "fretes_templates_valores"
+    __table_args__ = (
+        UniqueConstraint(
+            "empresa_id",
+            "caminhao_contratado_id",
+            "origem_id",
+            "destino_id",
+            "tem_retorno",
+            "tem_ponto_adicional",
+            name="uq_frete_template_chave",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(String, nullable=False)
+    caminhao_contratado_id = Column(String, nullable=False)
+    origem_id = Column(String, nullable=False)
+    destino_id = Column(String, nullable=False)
+    tem_retorno = Column(Boolean, nullable=False, default=False)
+    tem_ponto_adicional = Column(Boolean, nullable=False, default=False)
+    valor_padrao = Column(Float, nullable=True)
+    valor_retorno = Column(Float, nullable=True)
+    valor_ponto_adicional = Column(Float, nullable=True)
+    fonte = Column(String, nullable=False, default="manual_confirmado")
+    qtd_usos = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

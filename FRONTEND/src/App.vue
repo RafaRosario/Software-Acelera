@@ -79,6 +79,7 @@ const buscaDestinoFrete = ref('')
 const buscaMotoristasCadastro = ref('')
 const buscaVeiculosCadastro = ref('')
 const buscaEmpresasCadastro = ref('')
+const buscaHistoricoValores = ref('')
 const toast = ref(null)
 const freteArrastandoId = ref(null)
 const statusDestinoAtivo = ref('')
@@ -118,6 +119,8 @@ const podeCriarFrete = computed(() => ehAdmin.value)
 const mostrarAlocacaoCompleta = computed(() => ehAdmin.value)
 
 const usuariosSistema = ref([])
+const historicoValores = ref([])
+const sugestoesValorPorFrete = ref({})
 const usuarioSistemaEditandoId = ref(null)
 const novoUsuarioSistema = ref({
   nome: '',
@@ -357,6 +360,7 @@ const carregarTudo = async () => {
       fornecedores.value = []
       prestadoresServicos.value = []
       usuariosSistema.value = []
+      historicoValores.value = []
     } else if (ehControle.value) {
       const [motoristasResp, veiculosResp, empresasResp, fretesResp] = await Promise.all([
         axios.get(`${API_URL}/motoristas/`),
@@ -373,8 +377,9 @@ const carregarTudo = async () => {
       fornecedores.value = []
       prestadoresServicos.value = []
       usuariosSistema.value = []
+      historicoValores.value = []
     } else {
-      const [motoristasResp, alocacaoResp, veiculosResp, empresasResp, fretesResp, fornecedoresResp, prestadoresResp, usuariosResp] = await Promise.all([
+      const [motoristasResp, alocacaoResp, veiculosResp, empresasResp, fretesResp, fornecedoresResp, prestadoresResp, usuariosResp, historicoResp] = await Promise.all([
         axios.get(`${API_URL}/motoristas/`),
         axios.get(`${API_URL}/motoristas/alocacao/`),
         axios.get(`${API_URL}/veiculos/`),
@@ -383,6 +388,7 @@ const carregarTudo = async () => {
         axios.get(`${API_URL}/fornecedores/`),
         axios.get(`${API_URL}/prestadores-servicos/`),
         axios.get(`${API_URL}/usuarios/`),
+        axios.get(`${API_URL}/fretes-templates/valores`),
       ])
       fretesCarregados = fretesResp.data
       motoristas.value = motoristasResp.data
@@ -393,6 +399,7 @@ const carregarTudo = async () => {
       fornecedores.value = fornecedoresResp.data
       prestadoresServicos.value = prestadoresResp.data
       usuariosSistema.value = usuariosResp.data
+      historicoValores.value = historicoResp.data
     }
 
     if (!avisoPendenciasMostrado.value && fretesCarregados.some(freteEstaAtrasado)) {
@@ -754,6 +761,27 @@ const empresasCadastroFiltradas = computed(() => {
   })
 })
 
+const historicoValoresFiltrado = computed(() => {
+  const termo = normalizarTextoBusca(buscaHistoricoValores.value)
+  if (!termo) return historicoValores.value
+
+  return historicoValores.value.filter((template) => {
+    const dados = [
+      template.empresa_id,
+      template.caminhao_contratado_id,
+      template.origem_id,
+      template.destino_id,
+      template.fonte,
+      template.tem_retorno ? 'retorno' : 'sem retorno',
+      template.tem_ponto_adicional ? 'ponto adicional' : 'sem ponto adicional',
+    ]
+      .filter(Boolean)
+      .join(' ')
+
+    return normalizarTextoBusca(dados).includes(termo)
+  })
+})
+
 const nomeMotorista = (id) => {
   const encontrado = motoristas.value.find((motorista) => motorista.id === id)?.nome
   if (encontrado) return encontrado
@@ -907,6 +935,59 @@ const fecharMenuStatusFrete = () => {
   menuStatusFrete.value = { aberto: false, x: 0, y: 0, maxHeight: 420, frete: null }
 }
 
+const consultarSugestaoHistoricaAoConcluir = async (frete) => {
+  if (!podeEditarFretes.value || !frete?.id) return false
+  try {
+    const resposta = await axios.get(`${API_URL}/fretes/${frete.id}/sugestao-valor`)
+    const sugestao = resposta.data
+    if (!sugestao?.possui_sugestao) return false
+    sugestoesValorPorFrete.value = {
+      ...sugestoesValorPorFrete.value,
+      [String(frete.id)]: sugestao,
+    }
+    mostrarToast('Valor sugerido disponível para este frete.')
+    return true
+  } catch (error) {
+    mostrarToast('Nao foi possivel consultar valor sugerido.', 'error')
+    return false
+  }
+}
+
+const sugestaoValorFrete = (frete) => {
+  if (!frete?.id) return null
+  return sugestoesValorPorFrete.value[String(frete.id)] || null
+}
+
+const removerSugestaoValorFrete = (freteId) => {
+  const chave = String(freteId || '')
+  if (!chave || !sugestoesValorPorFrete.value[chave]) return
+  const atual = { ...sugestoesValorPorFrete.value }
+  delete atual[chave]
+  sugestoesValorPorFrete.value = atual
+}
+
+const aplicarSugestaoValorFrete = async (frete) => {
+  if (!podeEditarConcluidos.value) {
+    mostrarToast('Sem permissao para aplicar valor sugerido.', 'error')
+    return
+  }
+  const sugestao = sugestaoValorFrete(frete)
+  if (!sugestao?.possui_sugestao) return
+
+  frete.valor_servico = sugestao.valor_servico
+  frete.valor_retorno = sugestao.valor_retorno
+  frete.valor_ponto_adicional = sugestao.valor_ponto_adicional
+  await salvarComFeedback('Valor sugerido aplicado com sucesso.', async () => {
+    await axios.put(`${API_URL}/fretes/${frete.id}/valor`, valorFretePayload(frete))
+    removerSugestaoValorFrete(frete.id)
+    await carregarTudo()
+  })
+}
+
+const dispensarSugestaoValorFrete = (frete) => {
+  removerSugestaoValorFrete(frete?.id)
+}
+
 const moverFreteParaStatus = async (frete, status) => {
   if (!podeMoverStatusFrete.value) {
     mostrarToast('Sem permissao para mover status.', 'error')
@@ -926,6 +1007,9 @@ const moverFreteParaStatus = async (frete, status) => {
 
   frete.status = status
   fecharMenuStatusFrete()
+  if (status === STATUS_CONCLUIDO) {
+    await consultarSugestaoHistoricaAoConcluir(frete)
+  }
   await salvarAlocacao(frete)
 }
 
@@ -1660,6 +1744,9 @@ const soltarFreteEmStatus = async (event, status) => {
   }
 
   frete.status = status
+  if (status === STATUS_CONCLUIDO) {
+    await consultarSugestaoHistoricaAoConcluir(frete)
+  }
   await salvarAlocacao(frete)
   encerrarArrastoFrete()
 }
@@ -1678,6 +1765,23 @@ const salvarValorFrete = async (frete) => {
   }
   await salvarComFeedback('Valor salvo com sucesso.', async () => {
     await axios.put(`${API_URL}/fretes/${frete.id}/valor`, valorFretePayload(frete))
+    await carregarTudo()
+  })
+}
+
+const salvarTemplateValorHistorico = async (template) => {
+  if (!ehAdmin.value) {
+    mostrarToast('Sem permissao para editar historico de valores.', 'error')
+    return
+  }
+
+  await salvarComFeedback('Template de valor salvo com sucesso.', async () => {
+    await axios.put(`${API_URL}/fretes-templates/valores/${template.id}`, {
+      valor_padrao: template.valor_padrao === '' || template.valor_padrao === null ? null : Number(template.valor_padrao),
+      valor_retorno: template.valor_retorno === '' || template.valor_retorno === null ? null : Number(template.valor_retorno),
+      valor_ponto_adicional:
+        template.valor_ponto_adicional === '' || template.valor_ponto_adicional === null ? null : Number(template.valor_ponto_adicional),
+    })
     await carregarTudo()
   })
 }
@@ -2017,6 +2121,11 @@ const formatarData = (data) => {
   return new Date(`${data}T00:00:00`).toLocaleDateString('pt-BR')
 }
 
+const formatarDataHora = (dataHora) => {
+  if (!dataHora) return '-'
+  return new Date(dataHora).toLocaleString('pt-BR')
+}
+
 const formatarMoeda = (valor) => {
   return Number(valor || 0).toLocaleString('pt-BR', {
     style: 'currency',
@@ -2199,6 +2308,7 @@ const viewState = reactive({
   empresas,
   fornecedores,
   prestadoresServicos,
+  historicoValores,
   fretes,
   filtroDataInicioFretes,
   filtroDataFimFretes,
@@ -2215,6 +2325,7 @@ const viewState = reactive({
   buscaMotoristasCadastro,
   buscaVeiculosCadastro,
   buscaEmpresasCadastro,
+  buscaHistoricoValores,
   toast,
   freteArrastandoId,
   statusDestinoAtivo,
@@ -2297,6 +2408,9 @@ const viewState = reactive({
   fretesConcluidosFiltrados,
   totalConcluido,
   pontosAdicionaisFrete,
+  sugestaoValorFrete,
+  aplicarSugestaoValorFrete,
+  dispensarSugestaoValorFrete,
   historicoFretesMotorista,
   empresasPorNome,
   empresasClientes,
@@ -2304,6 +2418,7 @@ const viewState = reactive({
   motoristasCadastroFiltrados,
   veiculosCadastroFiltrados,
   empresasCadastroFiltradas,
+  historicoValoresFiltrado,
   nomeMotorista,
   telefoneMotorista,
   placaVeiculo,
@@ -2378,6 +2493,7 @@ const viewState = reactive({
   soltarFreteEmStatus,
   valorFretePayload,
   salvarValorFrete,
+  salvarTemplateValorHistorico,
   salvarValoresConcluidosFiltrados,
   salvarDocumentosFrete,
   salvarNotaFiscalFrete,
@@ -2412,6 +2528,7 @@ const viewState = reactive({
   abrirWhatsApp,
   copiarMensagem,
   formatarData,
+  formatarDataHora,
   formatarMoeda,
   periodoExportacaoConcluidos,
   exportarConcluidos,
