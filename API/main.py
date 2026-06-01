@@ -118,9 +118,21 @@ def caminho_normalizado(path: str) -> str:
 
 def rota_publica(path: str) -> bool:
     caminho = caminho_normalizado(path)
-    if caminho in ROTAS_PUBLICAS:
-        return True
-    return any(caminho.startswith(prefixo) for prefixo in ROTAS_PUBLICAS_PREFIXO)
+    caminhos_para_validar = {caminho}
+
+    # Em producao, algumas configuracoes de proxy encaminham a API com prefixo /api.
+    # Aceitamos as mesmas rotas publicas com e sem esse prefixo.
+    if caminho.startswith("/api/"):
+        caminhos_para_validar.add(caminho[4:])
+    elif caminho == "/api":
+        caminhos_para_validar.add("/")
+
+    for caminho_item in caminhos_para_validar:
+        if caminho_item in ROTAS_PUBLICAS:
+            return True
+        if any(caminho_item.startswith(prefixo) for prefixo in ROTAS_PUBLICAS_PREFIXO):
+            return True
+    return False
 
 
 def rota_permitida(cargo: str, metodo: str, path: str) -> bool:
