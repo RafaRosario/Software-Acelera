@@ -11,6 +11,7 @@ import PrestadoresServicosView from '../views/PrestadoresServicosView.vue'
 import LoginView from '../views/LoginView.vue'
 
 const ChecklistRoutePlaceholder = { render: () => null }
+const isChecklistPublicPath = (path) => /^\/checklists?\//.test(String(path || ''))
 
 const router = createRouter({
   history: createWebHistory(),
@@ -26,12 +27,13 @@ const router = createRouter({
     { path: '/fornecedores', component: FornecedoresView },
     { path: '/prestadores-servicos', component: PrestadoresServicosView },
     { path: '/checklist/:token', component: ChecklistRoutePlaceholder },
+    { path: '/checklists/:token', component: ChecklistRoutePlaceholder },
     { path: '/:pathMatch(.*)*', redirect: '/fretes' },
   ],
 })
 
 router.beforeEach(async (to) => {
-  if (to.path.startsWith('/checklist/')) return true
+  if (isChecklistPublicPath(to.path)) return true
 
   const usuario = authState.pronto ? authState.user : await restaurarSessao()
 
