@@ -303,6 +303,40 @@ class FreteDocumentosUpdate(BaseModel):
 class FreteNotaFiscalUpdate(BaseModel):
     nota_fiscal: Optional[str] = None
 
+
+class FreteSugestaoValorResponse(BaseModel):
+    possui_sugestao: bool
+    fonte: Optional[str] = None
+    qtd_usos: int = 0
+    valor_servico: Optional[float] = None
+    valor_retorno: Optional[float] = None
+    valor_ponto_adicional: Optional[float] = None
+
+
+class FreteTemplateValorResponse(BaseModel):
+    id: int
+    empresa_id: str
+    caminhao_contratado_id: str
+    origem_id: str
+    destino_id: str
+    tem_retorno: bool
+    tem_ponto_adicional: bool
+    valor_padrao: Optional[float] = None
+    valor_retorno: Optional[float] = None
+    valor_ponto_adicional: Optional[float] = None
+    fonte: str
+    qtd_usos: int
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FreteTemplateValorUpdate(BaseModel):
+    valor_padrao: Optional[float] = None
+    valor_retorno: Optional[float] = None
+    valor_ponto_adicional: Optional[float] = None
+
 class ChecklistFreteResponse(BaseModel):
     token: str
     frete_id: int

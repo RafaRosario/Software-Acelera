@@ -1,5 +1,6 @@
-<script setup>
-import { toRefs } from 'vue'
+﻿<script setup>
+import { ref, toRefs } from 'vue'
+import HistoricoValoresView from './HistoricoValoresView.vue'
 
 const { state } = defineProps({
   state: {
@@ -25,16 +26,33 @@ const {
   podeCriarFrete,
   podeEditarConcluidos,
   pontosAdicionaisFrete,
+  sugestaoValorFrete,
+  aplicarSugestaoValorFrete,
+  dispensarSugestaoValorFrete,
   salvarDocumentoPreenchidoFrete,
   salvarFechamentoFrete,
   salvarValorPreenchidoFrete,
   salvarValoresConcluidosFiltrados,
   totalConcluido,
 } = toRefs(state)
+
+const secaoConcluidos = ref('fechamento')
 </script>
 
 <template>
-    <section class="workspace">
+  <section class="workspace">
+    <div class="concluded-subnav">
+      <button :class="{ active: secaoConcluidos === 'fechamento' }" type="button" @click="secaoConcluidos = 'fechamento'">
+        Fechamento
+      </button>
+      <button :class="{ active: secaoConcluidos === 'valores' }" type="button" @click="secaoConcluidos = 'valores'">
+        Valores dos fretes
+      </button>
+    </div>
+
+    <HistoricoValoresView v-if="secaoConcluidos === 'valores'" :state="state" />
+
+    <template v-else>
       <div class="section-head">
         <div>
           <h2>Fretes concluídos</h2>
@@ -144,6 +162,36 @@ const {
             </label>
           </div>
 
+          <section v-if="sugestaoValorFrete(frete)?.possui_sugestao" class="concluded-suggestion-panel">
+            <div class="concluded-suggestion-head">
+              <strong>Valor sugerido</strong>
+              <span>Baseado em {{ sugestaoValorFrete(frete).qtd_usos || 0 }} uso(s) parecidos</span>
+            </div>
+            <div class="concluded-suggestion-values">
+              <span>Sugestão frete: {{ formatarMoeda(sugestaoValorFrete(frete).valor_servico) }}</span>
+              <span v-if="frete.retorno">Sugestão retorno: {{ formatarMoeda(sugestaoValorFrete(frete).valor_retorno) }}</span>
+              <span v-if="pontosAdicionaisFrete(frete).length > 0">Sugestão ponto: {{ formatarMoeda(sugestaoValorFrete(frete).valor_ponto_adicional) }}</span>
+            </div>
+            <div class="concluded-suggestion-actions">
+              <button
+                v-if="podeEditarConcluidos"
+                class="secondary suggestion-dismiss-button"
+                type="button"
+                @click="dispensarSugestaoValorFrete(frete)"
+              >
+                Dispensar sugestão
+              </button>
+              <button
+                v-if="podeEditarConcluidos"
+                class="suggestion-apply-button"
+                type="button"
+                @click="aplicarSugestaoValorFrete(frete)"
+              >
+                Aplicar sugestão
+              </button>
+            </div>
+          </section>
+
           <div class="concluded-card-footer">
             <div class="billing-summary">
               <span>Serviço: {{ formatarMoeda(frete.valor_servico) }}</span>
@@ -159,5 +207,6 @@ const {
 
         <p v-if="fretesConcluidosFiltrados.length === 0" class="empty">Nenhum frete concluído para este período.</p>
       </div>
-    </section>
+    </template>
+  </section>
 </template>

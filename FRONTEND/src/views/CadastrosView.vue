@@ -62,7 +62,7 @@ const {
         </div>
       </div>
 
-      <div class="cadastro-switch">
+      <div class="cadastro-switch cadastro-switch--compact">
         <button :class="{ active: cadastroAtivo === 'motoristas' }" type="button" @click="selecionarCadastroAtivo('motoristas')">Motoristas</button>
         <button :class="{ active: cadastroAtivo === 'veiculos' }" type="button" @click="selecionarCadastroAtivo('veiculos')">Caminhões</button>
         <button :class="{ active: cadastroAtivo === 'empresas' }" type="button" @click="selecionarCadastroAtivo('empresas')">Empresas</button>
@@ -239,7 +239,7 @@ const {
         </aside>
       </div>
 
-      <div v-if="cadastroAtivo === 'acessos' && ehAdmin" class="registry-layout">
+      <div v-if="cadastroAtivo === 'acessos' && ehAdmin" class="registry-layout acessos-layout">
         <div class="registry-form-card">
           <div class="registry-card-head">
             <span>04</span>
