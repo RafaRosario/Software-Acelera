@@ -61,7 +61,7 @@ CORS_ORIGINS = [
 ]
 
 ROTAS_PUBLICAS = {"/", "/docs", "/redoc", "/openapi.json", "/auth/login"}
-ROTAS_PUBLICAS_PREFIXO = ("/checklists/",)
+ROTAS_PUBLICAS_PREFIXO = ("/checklist/", "/checklists/")
 
 
 def normalizar_email(email: str) -> str:
