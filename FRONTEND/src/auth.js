@@ -93,7 +93,7 @@ export const rotaInicialPorCargo = (cargo) => {
 
 export const rotaPermitidaParaCargo = (path, cargo) => {
   if (!cargo) return false
-  if (String(path || '').startsWith('/checklist/')) return true
+  if (/^\/checklists?\//.test(String(path || ''))) return true
   const rota = normalizarRota(path)
   const rotas = rotasPermitidasPorCargo[cargo] || []
   return rotas.includes(rota)
