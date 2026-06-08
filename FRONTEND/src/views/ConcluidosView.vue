@@ -105,7 +105,13 @@ const secaoConcluidos = ref('fechamento')
             <div>
               <p class="time">{{ formatarData(frete.data_coleta) }} - {{ frete.horario_coleta.slice(0, 5) }}</p>
               <h3>{{ frete.origem }} → {{ frete.destino }}</h3>
-              <p class="muted">{{ nomeMotorista(frete.motorista_id) }} • {{ placaVeiculo(frete.veiculo_id) }} • NF: {{ frete.nota_fiscal || 'Sem nota' }}</p>
+              <p class="muted">
+                {{ nomeMotorista(frete.motorista_id) }} • Pedido: {{ frete.tipo_caminhao_necessario || 'Sem modelo' }} • Usado:
+                {{ placaVeiculo(frete.veiculo_id) }} • NF: {{ frete.nota_fiscal || 'Sem nota' }}
+              </p>
+              <p v-if="pontosAdicionaisFrete(frete).length > 0" class="muted">
+                Pontos adicionais: {{ pontosAdicionaisFrete(frete).join(', ') }}
+              </p>
             </div>
             <span class="badge concluida">concluído</span>
           </div>
