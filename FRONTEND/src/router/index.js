@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { authState, restaurarSessao, rotaInicialPorCargo, rotaPermitidaParaCargo } from '../auth'
+import { authState, isChecklistPublicPath, restaurarSessao, rotaInicialPorCargo, rotaPermitidaParaCargo } from '../auth'
 import FretesView from '../views/FretesView.vue'
 import ConcluidosView from '../views/ConcluidosView.vue'
 import CaminhoesView from '../views/CaminhoesView.vue'
@@ -11,7 +11,6 @@ import PrestadoresServicosView from '../views/PrestadoresServicosView.vue'
 import LoginView from '../views/LoginView.vue'
 
 const ChecklistRoutePlaceholder = { render: () => null }
-const isChecklistPublicPath = (path) => /^\/checklists?\//.test(String(path || ''))
 
 const router = createRouter({
   history: createWebHistory(),
@@ -26,14 +25,14 @@ const router = createRouter({
     { path: '/cadastros', component: CadastrosView },
     { path: '/fornecedores', component: FornecedoresView },
     { path: '/prestadores-servicos', component: PrestadoresServicosView },
-    { path: '/checklist/:token', component: ChecklistRoutePlaceholder },
-    { path: '/checklists/:token', component: ChecklistRoutePlaceholder },
+    { path: '/checklist/:token', component: ChecklistRoutePlaceholder, meta: { public: true } },
+    { path: '/checklists/:token', component: ChecklistRoutePlaceholder, meta: { public: true } },
     { path: '/:pathMatch(.*)*', redirect: '/fretes' },
   ],
 })
 
 router.beforeEach(async (to) => {
-  if (isChecklistPublicPath(to.path)) return true
+  if (to.meta.public || isChecklistPublicPath(to.path)) return true
 
   const usuario = authState.pronto ? authState.user : await restaurarSessao()
 

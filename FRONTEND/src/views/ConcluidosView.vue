@@ -12,6 +12,7 @@ const { state } = defineProps({
 const {
   dataFimConcluidos,
   dataInicioConcluidos,
+  cidadePorNomeEmpresa,
   editarFrete,
   empresasClientes,
   excluirConcluidosFiltrados,
@@ -105,6 +106,7 @@ const secaoConcluidos = ref('fechamento')
             <div>
               <p class="time">{{ formatarData(frete.data_coleta) }} - {{ frete.horario_coleta.slice(0, 5) }}</p>
               <h3>{{ frete.origem }} → {{ frete.destino }}</h3>
+              <p class="muted">{{ cidadePorNomeEmpresa(frete.origem) }} → {{ cidadePorNomeEmpresa(frete.destino) }}</p>
               <p class="muted">
                 {{ nomeMotorista(frete.motorista_id) }} • Pedido: {{ frete.tipo_caminhao_necessario || 'Sem modelo' }} • Usado:
                 {{ placaVeiculo(frete.veiculo_id) }} • NF: {{ frete.nota_fiscal || 'Sem nota' }}

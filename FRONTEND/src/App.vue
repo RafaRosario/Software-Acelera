@@ -2245,6 +2245,10 @@ const enderecoEmpresa = (empresa) => {
 
 const empresaPorNome = (nome) => empresasPorNome.value[nome]
 
+const cidadePorNomeEmpresa = (nome) => {
+  return empresaPorNome(nome)?.cidade || 'Cidade não cadastrada'
+}
+
 const enderecoPorNomeEmpresa = (nome) => {
   const empresa = empresaPorNome(nome)
   return empresa ? enderecoEmpresa(empresa) : 'Endereço não cadastrado'
@@ -2536,6 +2540,7 @@ const viewState = reactive({
   excluirConcluidosFiltrados,
   enderecoEmpresa,
   empresaPorNome,
+  cidadePorNomeEmpresa,
   enderecoPorNomeEmpresa,
   pontosMensagemFrete,
   logoAcelera,

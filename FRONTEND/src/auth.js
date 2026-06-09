@@ -2,6 +2,8 @@ import axios from 'axios'
 import { reactive } from 'vue'
 
 const TOKEN_STORAGE_KEY = 'acelera_access_token'
+export const isChecklistPublicPath = (path) => /^\/checklists?\/[^/]+\/?$/.test(String(path || ''))
+
 const rotasPermitidasPorCargo = {
   admin: [
     '/fretes',
@@ -93,7 +95,7 @@ export const rotaInicialPorCargo = (cargo) => {
 
 export const rotaPermitidaParaCargo = (path, cargo) => {
   if (!cargo) return false
-  if (/^\/checklists?\//.test(String(path || ''))) return true
+  if (isChecklistPublicPath(path)) return true
   const rota = normalizarRota(path)
   const rotas = rotasPermitidasPorCargo[cargo] || []
   return rotas.includes(rota)
