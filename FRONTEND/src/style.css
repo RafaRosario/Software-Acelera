@@ -2197,7 +2197,7 @@ textarea {
 }
 
 .fleet-metrics {
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
 }
 
 .vehicle-grid {
@@ -2347,6 +2347,186 @@ textarea {
 .vehicle-unavailable-reason p {
   color: var(--text);
   font-size: 14px;
+}
+
+.vehicle-card-head-right {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ocorrencias-badge {
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.ocorrencias-badge.badge-alert {
+  background: #fff3cd;
+  border: 1px solid #f0ad4e;
+  color: #7d5a00;
+}
+
+.ocorrencias-badge.badge-ok {
+  background: #e8f5e9;
+  border: 1px solid #81c784;
+  color: #2e7d32;
+}
+
+.metric-alert strong {
+  color: var(--danger);
+}
+
+.ocorrencias-modal {
+  max-width: 680px;
+  width: min(100%, 680px);
+}
+
+.ocorrencias-modal-body {
+  display: grid;
+  gap: 20px;
+  max-height: calc(90vh - 120px);
+  overflow-y: auto;
+  padding: 20px 22px;
+}
+
+.ocorrencia-form {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.ocorrencia-form h4,
+.ocorrencias-lista h4 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.ocorrencia-form-fields {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.ocorrencias-lista {
+  display: grid;
+  gap: 10px;
+}
+
+.ocorrencia-item {
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.ocorrencia-item.ocorrencia-aberta {
+  background: #fff8f8;
+  border-left-color: var(--danger);
+}
+
+.ocorrencia-item.ocorrencia-em-resolucao {
+  background: #fffaf0;
+  border-left-color: var(--warning);
+}
+
+.ocorrencia-item.ocorrencia-resolvida {
+  background: #f6fff8;
+  border-left-color: var(--ok);
+  opacity: 0.8;
+}
+
+.ocorrencia-item-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.ocorrencia-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ocorrencia-meta strong {
+  font-size: 14px;
+}
+
+.ocorrencia-urgencia,
+.ocorrencia-status-badge {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
+.ocorrencia-data {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.ocorrencia-descricao {
+  color: var(--text);
+  font-size: 13px;
+  margin: 0;
+}
+
+.ocorrencia-reportado {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ocorrencia-resolucao {
+  background: #e8f5e9;
+  border-radius: 4px;
+  color: #2e7d32;
+  font-size: 13px;
+  margin: 0;
+  padding: 6px 10px;
+}
+
+.ocorrencia-acoes {
+  display: grid;
+  gap: 8px;
+}
+
+.ocorrencia-resolver-form {
+  display: grid;
+  gap: 8px;
+}
+
+.ocorrencias-aviso {
+  background: #fff3cd;
+  border: 1px solid #f0ad4e;
+  border-radius: 6px;
+  color: #7d5a00;
+  font-size: 13px;
+  grid-column: 1 / -1;
+  padding: 10px 14px;
+}
+
+.ocorrencias-aviso ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.ocorrencias-aviso li {
+  margin-top: 4px;
 }
 
 .vehicle-actions {

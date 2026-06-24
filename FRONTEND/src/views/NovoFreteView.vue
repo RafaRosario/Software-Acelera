@@ -30,7 +30,8 @@ const {
   selecionarDestinoFrete,
   selecionarOrigemFrete,
   tiposVeiculo,
-  veiculos,
+  veiculosParaFrete,
+  ocorrenciasVeiculoSelecionado,
 } = toRefs(state)
 </script>
 
@@ -109,7 +110,13 @@ const {
         <label class="field">Valor do serviço<input v-model="novoFrete.valor_servico" type="number" min="0" step="0.01" placeholder="Opcional" /></label>
         <label class="check-field"><input v-model="novoFrete.retorno" type="checkbox" /> Criar retorno para cobrança</label>
         <label class="field">Motorista<select v-model="novoFrete.motorista_id" required><option value="" disabled></option><option v-for="motorista in motoristas" :key="motorista.id" :value="motorista.id">{{ motorista.nome }}</option></select></label>
-        <label class="field">Caminhão<select v-model="novoFrete.veiculo_id" required><option value="" disabled></option><option v-for="veiculo in veiculos" :key="veiculo.id" :value="veiculo.id">{{ veiculo.placa }} - {{ veiculo.tipo }}</option></select></label>
+        <label class="field">Caminhão<select v-model="novoFrete.veiculo_id" required><option value="" disabled></option><option v-for="veiculo in veiculosParaFrete" :key="veiculo.id" :value="veiculo.id">{{ veiculo.placa }} - {{ veiculo.tipo }}</option></select></label>
+        <div v-if="ocorrenciasVeiculoSelecionado.length > 0" class="ocorrencias-aviso">
+          <strong>⚠️ Atenção:</strong> Este caminhão tem {{ ocorrenciasVeiculoSelecionado.length }} ocorrência(s) em aberto:
+          <ul>
+            <li v-for="o in ocorrenciasVeiculoSelecionado" :key="o.id">{{ o.categoria }} — {{ o.descricao }}</li>
+          </ul>
+        </div>
         <label class="field wide">Observações<textarea v-model="novoFrete.observacoes" rows="3"></textarea></label>
         <div class="form-actions freight-form-actions">
           <button type="submit">{{ freteEditandoId ? 'Salvar alterações' : 'Cadastrar frete' }}</button>

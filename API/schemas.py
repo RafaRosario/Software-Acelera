@@ -110,6 +110,38 @@ class VeiculoUpdate(BaseModel):
     observacao_estado: Optional[str] = None
     motivo_indisponibilidade: Optional[str] = None
 
+
+class OcorrenciaVeiculoBase(BaseModel):
+    veiculo_id: int
+    categoria: str
+    descricao: str
+    urgencia: str = "Baixa"
+    reportado_por: Optional[str] = None
+
+
+class OcorrenciaVeiculoCreate(OcorrenciaVeiculoBase):
+    pass
+
+
+class OcorrenciaVeiculoUpdate(BaseModel):
+    categoria: Optional[str] = None
+    descricao: Optional[str] = None
+    urgencia: Optional[str] = None
+    reportado_por: Optional[str] = None
+    status: Optional[str] = None
+    resolucao: Optional[str] = None
+
+
+class OcorrenciaVeiculoResponse(OcorrenciaVeiculoBase):
+    id: int
+    status: str
+    resolucao: Optional[str] = None
+    criado_em: datetime
+    resolvido_em: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 class EmpresaBase(BaseModel):
     nome: str
     cnpj: str

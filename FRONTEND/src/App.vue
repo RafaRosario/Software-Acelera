@@ -90,6 +90,11 @@ const filtroSituacaoVeiculo = ref('Todos')
 const filtroTipoVeiculo = ref('Todos')
 const veiculoIndisponibilidadeAberto = ref(null)
 const motivoIndisponibilidadeVeiculo = ref('')
+const ocorrencias = ref([])
+const veiculoOcorrenciasAberto = ref(null)
+const novaOcorrencia = ref({ categoria: '', descricao: '', urgencia: 'Baixa', reportado_por: '' })
+const ocorrenciaEditandoId = ref(null)
+const ocorrenciaResolucaoTexto = ref('')
 const motoristaEditandoId = ref(null)
 const veiculoEditandoId = ref(null)
 const empresaEditandoId = ref(null)
@@ -363,11 +368,12 @@ const carregarTudo = async () => {
       usuariosSistema.value = []
       historicoValores.value = []
     } else if (ehControle.value) {
-      const [motoristasResp, veiculosResp, empresasResp, fretesResp] = await Promise.all([
+      const [motoristasResp, veiculosResp, empresasResp, fretesResp, ocorrenciasResp] = await Promise.all([
         axios.get(`${API_URL}/motoristas/`),
         axios.get(`${API_URL}/veiculos/`),
         axios.get(`${API_URL}/empresas/`),
         axios.get(`${API_URL}/fretes/`),
+        axios.get(`${API_URL}/ocorrencias-veiculos/`),
       ])
       fretesCarregados = fretesResp.data
       motoristas.value = motoristasResp.data
@@ -379,8 +385,9 @@ const carregarTudo = async () => {
       prestadoresServicos.value = []
       usuariosSistema.value = []
       historicoValores.value = []
+      ocorrencias.value = ocorrenciasResp.data
     } else {
-      const [motoristasResp, alocacaoResp, veiculosResp, empresasResp, fretesResp, fornecedoresResp, prestadoresResp, usuariosResp, historicoResp] = await Promise.all([
+      const [motoristasResp, alocacaoResp, veiculosResp, empresasResp, fretesResp, fornecedoresResp, prestadoresResp, usuariosResp, historicoResp, ocorrenciasResp] = await Promise.all([
         axios.get(`${API_URL}/motoristas/`),
         axios.get(`${API_URL}/motoristas/alocacao/`),
         axios.get(`${API_URL}/veiculos/`),
@@ -390,6 +397,7 @@ const carregarTudo = async () => {
         axios.get(`${API_URL}/prestadores-servicos/`),
         axios.get(`${API_URL}/usuarios/`),
         axios.get(`${API_URL}/fretes-templates/valores`),
+        axios.get(`${API_URL}/ocorrencias-veiculos/`),
       ])
       fretesCarregados = fretesResp.data
       motoristas.value = motoristasResp.data
@@ -401,6 +409,7 @@ const carregarTudo = async () => {
       prestadoresServicos.value = prestadoresResp.data
       usuariosSistema.value = usuariosResp.data
       historicoValores.value = historicoResp.data
+      ocorrencias.value = ocorrenciasResp.data
     }
 
     if (!avisoPendenciasMostrado.value && fretesCarregados.some(freteEstaAtrasado)) {
@@ -572,6 +581,8 @@ const classeSituacaoMotorista = (motorista) => situacaoMotorista(motorista).toLo
 
 const fretesUsoMotorista = (motorista) => fretesAbertosPorMotorista.value[motorista.id] || []
 
+const veiculosParaFrete = computed(() => veiculos.value.filter((v) => v.ativo))
+
 const veiculosFiltrados = computed(() => {
   return veiculos.value.filter((veiculo) => {
     const situacaoConfere = filtroSituacaoVeiculo.value === 'Todos' || situacaoVeiculo(veiculo) === filtroSituacaoVeiculo.value
@@ -585,7 +596,75 @@ const totaisVeiculos = computed(() => ({
   disponiveis: veiculos.value.filter((veiculo) => situacaoVeiculo(veiculo) === 'Disponivel').length,
   emUso: veiculos.value.filter((veiculo) => situacaoVeiculo(veiculo) === 'Em uso').length,
   indisponiveis: veiculos.value.filter((veiculo) => situacaoVeiculo(veiculo) === 'Indisponivel').length,
+  comOcorrencias: veiculos.value.filter((veiculo) =>
+    ocorrencias.value.some((o) => o.veiculo_id === veiculo.id && o.status !== 'Resolvido')
+  ).length,
 }))
+
+const ocorrenciasPorVeiculo = computed(() => {
+  return ocorrencias.value.reduce((mapa, ocorrencia) => {
+    const chave = ocorrencia.veiculo_id
+    mapa[chave] = [...(mapa[chave] || []), ocorrencia]
+    return mapa
+  }, {})
+})
+
+const ocorrenciasAbertas = (veiculo) =>
+  (ocorrenciasPorVeiculo.value[veiculo.id] || []).filter((o) => o.status !== 'Resolvido')
+
+const ocorrenciasVeiculoSelecionado = computed(() => {
+  const id = Number(novoFrete.value.veiculo_id)
+  if (!id) return []
+  return (ocorrenciasPorVeiculo.value[id] || []).filter((o) => o.status !== 'Resolvido')
+})
+
+const abrirOcorrenciasVeiculo = (veiculo) => {
+  veiculoOcorrenciasAberto.value = veiculo
+  novaOcorrencia.value = { categoria: '', descricao: '', urgencia: 'Baixa', reportado_por: '' }
+  ocorrenciaEditandoId.value = null
+  ocorrenciaResolucaoTexto.value = ''
+}
+
+const fecharOcorrenciasVeiculo = () => {
+  veiculoOcorrenciasAberto.value = null
+  ocorrenciaEditandoId.value = null
+  ocorrenciaResolucaoTexto.value = ''
+}
+
+const adicionarOcorrenciaVeiculo = async () => {
+  if (!novaOcorrencia.value.categoria || !novaOcorrencia.value.descricao) {
+    mostrarToast('Preencha categoria e descrição.', 'error')
+    return
+  }
+  await salvarComFeedback('Ocorrência registrada.', async () => {
+    const resp = await axios.post(`${API_URL}/ocorrencias-veiculos/`, {
+      ...novaOcorrencia.value,
+      veiculo_id: veiculoOcorrenciasAberto.value.id,
+    })
+    ocorrencias.value.unshift(resp.data)
+    novaOcorrencia.value = { categoria: '', descricao: '', urgencia: 'Baixa', reportado_por: '' }
+  })
+}
+
+const resolverOcorrenciaVeiculo = async (ocorrencia) => {
+  await salvarComFeedback('Ocorrência resolvida.', async () => {
+    const resp = await axios.put(`${API_URL}/ocorrencias-veiculos/${ocorrencia.id}`, {
+      status: 'Resolvido',
+      resolucao: ocorrenciaResolucaoTexto.value || null,
+    })
+    const idx = ocorrencias.value.findIndex((o) => o.id === ocorrencia.id)
+    if (idx !== -1) ocorrencias.value[idx] = resp.data
+    ocorrenciaEditandoId.value = null
+    ocorrenciaResolucaoTexto.value = ''
+  })
+}
+
+const excluirOcorrenciaVeiculo = async (ocorrencia) => {
+  await salvarComFeedback('Ocorrência excluída.', async () => {
+    await axios.delete(`${API_URL}/ocorrencias-veiculos/${ocorrencia.id}`)
+    ocorrencias.value = ocorrencias.value.filter((o) => o.id !== ocorrencia.id)
+  })
+}
 
 const fretesPorData = computed(() => {
   return fretes.value.filter((frete) => {
@@ -2406,8 +2485,22 @@ const viewState = reactive({
   situacaoMotorista,
   classeSituacaoMotorista,
   fretesUsoMotorista,
+  veiculosParaFrete,
   veiculosFiltrados,
   totaisVeiculos,
+  ocorrencias,
+  ocorrenciasPorVeiculo,
+  ocorrenciasAbertas,
+  ocorrenciasVeiculoSelecionado,
+  veiculoOcorrenciasAberto,
+  novaOcorrencia,
+  ocorrenciaEditandoId,
+  ocorrenciaResolucaoTexto,
+  abrirOcorrenciasVeiculo,
+  fecharOcorrenciasVeiculo,
+  adicionarOcorrenciaVeiculo,
+  resolverOcorrenciaVeiculo,
+  excluirOcorrenciaVeiculo,
   fretesPorData,
   empresasColetaDisponiveis,
   buscarEmpresasPorTermo,
