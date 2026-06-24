@@ -34,7 +34,7 @@ except ImportError:
 
 import models
 import schemas
-from database import SessionLocal, engine
+from database import SQLALCHEMY_DATABASE_URL, SessionLocal, engine
 
 API_DIR = Path(__file__).resolve().parent
 ROOT_DIR = API_DIR.parent
@@ -277,7 +277,7 @@ def preparar_banco():
             "checklist_confirmado": "ALTER TABLE fretes ADD COLUMN checklist_confirmado BOOLEAN DEFAULT 0",
             "checklist_confirmado_em": "ALTER TABLE fretes ADD COLUMN checklist_confirmado_em DATETIME",
             "checklist_observacoes": "ALTER TABLE fretes ADD COLUMN checklist_observacoes TEXT",
-            "ultima_notificacao_push": "ALTER TABLE fretes ADD COLUMN ultima_notificacao_push DATETIME",
+            "ultima_notificacao_push": "ALTER TABLE fretes ADD COLUMN ultima_notificacao_push " + ("DATETIME" if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else "TIMESTAMP"),
         }
 
         with engine.begin() as conexao:
