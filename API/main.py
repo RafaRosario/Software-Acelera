@@ -1,15 +1,19 @@
+import asyncio
 import base64
 import hashlib
 import hmac
 import io
+import json as json_module
 import os
 import re
 import secrets
 import zipfile
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 from xml.sax.saxutils import escape
+from zoneinfo import ZoneInfo
 
 import jwt
 from dotenv import load_dotenv
@@ -19,6 +23,14 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
+try:
+    from pywebpush import WebPushException
+    from pywebpush import webpush as _enviar_webpush
+    WEBPUSH_DISPONIVEL = True
+except ImportError:
+    WEBPUSH_DISPONIVEL = False
+    print("AVISO: pywebpush nao instalado. Execute: pip install pywebpush")
 
 import models
 import schemas
@@ -60,8 +72,28 @@ CORS_ORIGINS = [
     if origem.strip()
 ]
 
-ROTAS_PUBLICAS = {"/", "/docs", "/redoc", "/openapi.json", "/auth/login"}
+ROTAS_PUBLICAS = {"/", "/docs", "/redoc", "/openapi.json", "/auth/login", "/push/vapid-public-key"}
 ROTAS_PUBLICAS_PREFIXO = ("/checklist/", "/checklists/")
+
+TIMEZONE = os.getenv("ACELERA_TIMEZONE", "America/Sao_Paulo")
+
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+
+if WEBPUSH_DISPONIVEL and (not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY):
+    from cryptography.hazmat.primitives.asymmetric import ec as _ec
+    from cryptography.hazmat.primitives.serialization import Encoding as _Enc, PublicFormat as _PF
+    _pk = _ec.generate_private_key(_ec.SECP256R1())
+    _raw = _pk.private_numbers().private_value.to_bytes(32, "big")
+    VAPID_PRIVATE_KEY = base64.urlsafe_b64encode(_raw).rstrip(b"=").decode()
+    _pub = _pk.public_key().public_bytes(_Enc.X962, _PF.UncompressedPoint)
+    VAPID_PUBLIC_KEY = base64.urlsafe_b64encode(_pub).rstrip(b"=").decode()
+    print("=" * 60)
+    print("ATENCAO: Chaves VAPID geradas automaticamente (temporarias).")
+    print("Defina no Railway para que as inscricoes persistam entre reinicializacoes:")
+    print(f"  VAPID_PRIVATE_KEY={VAPID_PRIVATE_KEY}")
+    print(f"  VAPID_PUBLIC_KEY={VAPID_PUBLIC_KEY}")
+    print("=" * 60)
 
 
 def normalizar_email(email: str) -> str:
@@ -143,6 +175,9 @@ def rota_permitida(cargo: str, metodo: str, path: str) -> bool:
     metodo_http = (metodo or "").upper()
 
     if caminho == "/auth/me" and metodo_http == "GET":
+        return True
+
+    if caminho == "/push/subscribe" and metodo_http in {"POST", "DELETE"}:
         return True
 
     if cargo == CARGO_CONTROLE:
@@ -242,6 +277,7 @@ def preparar_banco():
             "checklist_confirmado": "ALTER TABLE fretes ADD COLUMN checklist_confirmado BOOLEAN DEFAULT 0",
             "checklist_confirmado_em": "ALTER TABLE fretes ADD COLUMN checklist_confirmado_em DATETIME",
             "checklist_observacoes": "ALTER TABLE fretes ADD COLUMN checklist_observacoes TEXT",
+            "ultima_notificacao_push": "ALTER TABLE fretes ADD COLUMN ultima_notificacao_push DATETIME",
         }
 
         with engine.begin() as conexao:
@@ -470,7 +506,116 @@ def preparar_banco():
 
 preparar_banco()
 
-app = FastAPI(title="API Acelera Transportes")
+
+def _verificar_fretes_pendentes():
+    if not WEBPUSH_DISPONIVEL or not VAPID_PRIVATE_KEY:
+        return
+    tz = ZoneInfo(TIMEZONE)
+    agora_utc = datetime.utcnow()
+    agora_loc = datetime.now(tz).replace(tzinfo=None)
+
+    db = SessionLocal()
+    try:
+        fretes = db.query(models.Frete).filter(
+            models.Frete.status == "Aguardando horario"
+        ).all()
+
+        fretes_para_notificar = []
+        for frete in fretes:
+            coleta_dt = datetime.combine(frete.data_coleta, frete.horario_coleta)
+            minutos_restantes = (coleta_dt - agora_loc).total_seconds() / 60
+            if minutos_restantes > 20:
+                continue
+            if frete.ultima_notificacao_push is None:
+                fretes_para_notificar.append((frete, minutos_restantes))
+            else:
+                desde_ultima = (agora_utc - frete.ultima_notificacao_push).total_seconds() / 60
+                if desde_ultima >= 10:
+                    fretes_para_notificar.append((frete, minutos_restantes))
+
+        if not fretes_para_notificar:
+            return
+
+        subscriptions = db.query(models.PushSubscription).all()
+        if not subscriptions:
+            return
+
+        ids_expiradas = set()
+        for frete, minutos_restantes in fretes_para_notificar:
+            horario_str = frete.horario_coleta.strftime("%H:%M")
+            if minutos_restantes > 1:
+                titulo = f"Frete em {int(minutos_restantes)} min — acao necessaria"
+                corpo = f"{frete.cliente} — saida prevista {horario_str}, ainda Aguardando Horario"
+            elif minutos_restantes >= 0:
+                titulo = f"Horario do frete agora! ({horario_str})"
+                corpo = f"{frete.cliente} — ainda em Aguardando Horario"
+            else:
+                titulo = f"Frete atrasado {int(-minutos_restantes)} min"
+                corpo = f"{frete.cliente} — saida era {horario_str}, ainda Aguardando"
+
+            payload = json_module.dumps({
+                "title": titulo,
+                "body": corpo,
+                "url": "/fretes",
+                "frete_id": frete.id,
+            })
+
+            for sub in subscriptions:
+                try:
+                    _enviar_webpush(
+                        subscription_info={
+                            "endpoint": sub.endpoint,
+                            "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
+                        },
+                        data=payload,
+                        vapid_private_key=VAPID_PRIVATE_KEY,
+                        vapid_claims={"sub": "mailto:noreply@acelera.com"},
+                        ttl=900,
+                    )
+                except WebPushException as exc:
+                    if exc.response is not None and exc.response.status_code in (404, 410):
+                        ids_expiradas.add(sub.id)
+                    else:
+                        print(f"Push falhou (endpoint expirado?): {exc}")
+                except Exception as exc:
+                    print(f"Erro ao enviar push: {exc}")
+
+            frete.ultima_notificacao_push = agora_utc
+
+        if ids_expiradas:
+            db.query(models.PushSubscription).filter(
+                models.PushSubscription.id.in_(ids_expiradas)
+            ).delete(synchronize_session=False)
+
+        db.commit()
+    except Exception as exc:
+        print(f"Erro em _verificar_fretes_pendentes: {exc}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+async def _loop_notificacoes():
+    while True:
+        await asyncio.sleep(60)
+        try:
+            await asyncio.get_event_loop().run_in_executor(None, _verificar_fretes_pendentes)
+        except Exception as exc:
+            print(f"Erro no loop de notificacoes: {exc}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    tarefa = asyncio.create_task(_loop_notificacoes())
+    yield
+    tarefa.cancel()
+    try:
+        await tarefa
+    except asyncio.CancelledError:
+        pass
+
+
+app = FastAPI(title="API Acelera Transportes", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1046,8 +1191,32 @@ def atualizar_motorista(motorista_id: int, dados: schemas.MotoristaUpdate, db: S
 @app.delete("/motoristas/{motorista_id}", tags=["Motoristas"])
 def excluir_motorista(motorista_id: int, db: Session = Depends(get_db)):
     db_motorista = obter_ou_404(db, models.Motorista, motorista_id, "Motorista nao encontrado")
-    db.delete(db_motorista)
-    db.commit()
+
+    fretes_vinculados = db.query(models.Frete).filter(
+        models.Frete.motorista_id == motorista_id
+    ).count()
+    if fretes_vinculados > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Este motorista possui {fretes_vinculados} frete(s) no histórico. Desative-o em vez de excluir.",
+        )
+
+    usuario_vinculado = db.query(models.Usuario).filter(
+        models.Usuario.motorista_id == motorista_id
+    ).first()
+    if usuario_vinculado:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Este motorista está vinculado ao usuário '{usuario_vinculado.nome}'. Remova o vínculo em Acessos antes de excluir.",
+        )
+
+    try:
+        db.delete(db_motorista)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Nao e possivel excluir: motorista possui registros vinculados.")
+
     return {"mensagem": "Motorista excluido"}
 
 
@@ -1697,3 +1866,50 @@ def listar_motoristas_alocacao(db: Session = Depends(get_db)):
         }
         for motorista in motoristas
     ]
+
+
+@app.get("/push/vapid-public-key", tags=["Push"])
+def obter_vapid_public_key():
+    return {"public_key": VAPID_PUBLIC_KEY}
+
+
+@app.post("/push/subscribe", tags=["Push"])
+def registrar_push_subscription(
+    dados: schemas.PushSubscriptionCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    usuario = usuario_logado(request)
+    usuario_id = int(usuario["id"])
+
+    existente = db.query(models.PushSubscription).filter(
+        models.PushSubscription.endpoint == dados.endpoint
+    ).first()
+    if existente:
+        existente.p256dh = dados.p256dh
+        existente.auth = dados.auth
+        existente.usuario_id = usuario_id
+        db.commit()
+        return {"status": "atualizado"}
+
+    nova = models.PushSubscription(
+        usuario_id=usuario_id,
+        endpoint=dados.endpoint,
+        p256dh=dados.p256dh,
+        auth=dados.auth,
+    )
+    db.add(nova)
+    db.commit()
+    return {"status": "inscrito"}
+
+
+@app.delete("/push/subscribe", tags=["Push"])
+def remover_push_subscription(
+    dados: schemas.PushSubscriptionCreate,
+    db: Session = Depends(get_db),
+):
+    db.query(models.PushSubscription).filter(
+        models.PushSubscription.endpoint == dados.endpoint
+    ).delete()
+    db.commit()
+    return {"status": "removido"}

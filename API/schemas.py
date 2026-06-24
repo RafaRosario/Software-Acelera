@@ -508,6 +508,12 @@ class UsuarioSistemaUpdate(BaseModel):
         return senha
 
 
+class PushSubscriptionCreate(BaseModel):
+    endpoint: str
+    p256dh: str
+    auth: str
+
+
 class UsuarioSistemaResponse(BaseModel):
     id: int
     nome: str

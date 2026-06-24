@@ -13,6 +13,7 @@ import iconFornecedores from './assets/icon-fornecedores.png'
 import iconPrestadores from './assets/icon-prestadores.png'
 import ChecklistPublicView from './views/ChecklistPublicView.vue'
 import { API_URL, authState, encerrarSessao, rotaInicialPorCargo, rotaPermitidaParaCargo } from './auth'
+import { iniciarNotificacoesPush } from './push'
 const tiposVeiculo = ['Motoboy', 'Fiorino', 'Iveco', '3/4', 'Toco', 'Truk', 'Carreta']
 const STATUS_AGUARDANDO = 'Aguardando horario'
 const STATUS_CAMINHO_P1 = 'A caminho P1'
@@ -1083,7 +1084,7 @@ const formatarRg = (valor) => {
 }
 
 const cpfValido = (valor) => {
-    mostrarToast('CPF inválido. Confira os dígitos.', 'error')
+  const cpf = apenasDigitos(valor)
   if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false
 
   const calcularDigito = (base) => {
@@ -1888,11 +1889,15 @@ const excluirFrete = async (id) => {
 
 const excluirMotorista = async (id) => {
   if (!podeGerenciarCadastros.value) {
-    mostrarToast('Sem permissao para excluir motorista.', 'error')
+    mostrarToast('Sem permissão para excluir motorista.', 'error')
     return
   }
-  await axios.delete(`${API_URL}/motoristas/${id}`)
-  await carregarTudo()
+  try {
+    await axios.delete(`${API_URL}/motoristas/${id}`)
+    await carregarTudo()
+  } catch (error) {
+    mostrarToast(error?.response?.data?.detail || 'Não foi possível excluir o motorista.', 'error')
+  }
 }
 
 const excluirVeiculo = async (id) => {
@@ -2576,6 +2581,14 @@ watch(cargoUsuario, (cargo) => {
     router.replace(rotaInicialUsuario.value).catch(() => {})
   }
 })
+
+watch(
+  () => authState.user,
+  (user) => {
+    if (user) iniciarNotificacoesPush()
+  },
+  { immediate: true },
+)
 
 onMounted(() => {
   if (!modoChecklist.value && !modoLogin.value) carregarTudo()
