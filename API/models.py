@@ -147,6 +147,23 @@ class Frete(Base):
     frete_principal = relationship("Frete", remote_side=[id])
 
 
+class OcorrenciaVeiculo(Base):
+    __tablename__ = "ocorrencias_veiculos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    veiculo_id = Column(Integer, ForeignKey("veiculos.id"), nullable=False)
+    categoria = Column(String, nullable=False)
+    descricao = Column(Text, nullable=False)
+    urgencia = Column(String, nullable=False, default="Baixa")
+    reportado_por = Column(String, nullable=True)
+    criado_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+    status = Column(String, nullable=False, default="Aberto")
+    resolucao = Column(Text, nullable=True)
+    resolvido_em = Column(DateTime, nullable=True)
+
+    veiculo = relationship("Veiculo")
+
+
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
 

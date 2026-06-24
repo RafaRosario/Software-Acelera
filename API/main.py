@@ -1260,6 +1260,41 @@ def excluir_veiculo(veiculo_id: int, db: Session = Depends(get_db)):
     return {"mensagem": "Veiculo excluido"}
 
 
+@app.post("/ocorrencias-veiculos/", response_model=schemas.OcorrenciaVeiculoResponse, tags=["Veiculos"])
+def criar_ocorrencia_veiculo(ocorrencia: schemas.OcorrenciaVeiculoCreate, db: Session = Depends(get_db)):
+    obter_ou_404(db, models.Veiculo, ocorrencia.veiculo_id, "Veiculo nao encontrado")
+    db_ocorrencia = models.OcorrenciaVeiculo(**ocorrencia.model_dump())
+    db.add(db_ocorrencia)
+    db.commit()
+    db.refresh(db_ocorrencia)
+    return db_ocorrencia
+
+
+@app.get("/ocorrencias-veiculos/", response_model=list[schemas.OcorrenciaVeiculoResponse], tags=["Veiculos"])
+def listar_ocorrencias_veiculos(db: Session = Depends(get_db)):
+    return db.query(models.OcorrenciaVeiculo).order_by(models.OcorrenciaVeiculo.criado_em.desc()).all()
+
+
+@app.put("/ocorrencias-veiculos/{ocorrencia_id}", response_model=schemas.OcorrenciaVeiculoResponse, tags=["Veiculos"])
+def atualizar_ocorrencia_veiculo(ocorrencia_id: int, dados: schemas.OcorrenciaVeiculoUpdate, db: Session = Depends(get_db)):
+    db_ocorrencia = obter_ou_404(db, models.OcorrenciaVeiculo, ocorrencia_id, "Ocorrencia nao encontrada")
+    for campo, valor in dados.model_dump(exclude_unset=True).items():
+        setattr(db_ocorrencia, campo, valor)
+    if dados.status == "Resolvido" and not db_ocorrencia.resolvido_em:
+        db_ocorrencia.resolvido_em = datetime.utcnow()
+    db.commit()
+    db.refresh(db_ocorrencia)
+    return db_ocorrencia
+
+
+@app.delete("/ocorrencias-veiculos/{ocorrencia_id}", tags=["Veiculos"])
+def excluir_ocorrencia_veiculo(ocorrencia_id: int, db: Session = Depends(get_db)):
+    db_ocorrencia = obter_ou_404(db, models.OcorrenciaVeiculo, ocorrencia_id, "Ocorrencia nao encontrada")
+    db.delete(db_ocorrencia)
+    db.commit()
+    return {"mensagem": "Ocorrencia excluida"}
+
+
 @app.post("/empresas/", response_model=schemas.EmpresaResponse, tags=["Empresas"])
 def criar_empresa(empresa: schemas.EmpresaCreate, db: Session = Depends(get_db)):
     dados = empresa.model_dump()
