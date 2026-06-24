@@ -137,13 +137,27 @@ class Frete(Base):
     checklist_confirmado = Column(Boolean, default=False)
     checklist_confirmado_em = Column(DateTime, nullable=True)
     checklist_observacoes = Column(Text, nullable=True)
-    
+    ultima_notificacao_push = Column(DateTime, nullable=True)
+
     motorista_id = Column(Integer, ForeignKey("motoristas.id"), nullable=True)
     veiculo_id = Column(Integer, ForeignKey("veiculos.id"), nullable=True)
     
     motorista = relationship("Motorista")
     veiculo = relationship("Veiculo")
     frete_principal = relationship("Frete", remote_side=[id])
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    endpoint = Column(Text, nullable=False, unique=True)
+    p256dh = Column(Text, nullable=False)
+    auth = Column(Text, nullable=False)
+    criado_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    usuario = relationship("Usuario")
 
 
 class FreteTemplateValor(Base):
