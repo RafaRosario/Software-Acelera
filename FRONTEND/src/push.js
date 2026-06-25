@@ -27,7 +27,8 @@ export async function iniciarNotificacoesPush() {
 
     const inscricaoExistente = await registro.pushManager.getSubscription()
     if (inscricaoExistente) {
-      await inscricaoExistente.unsubscribe()
+      _inscricaoAtiva = true
+      return
     }
 
     const inscricao = await registro.pushManager.subscribe({
