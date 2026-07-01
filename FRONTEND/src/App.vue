@@ -1033,6 +1033,30 @@ const consultarSugestaoHistoricaAoConcluir = async (frete) => {
   }
 }
 
+const podeVerSugestoesConcluidos = computed(() => ehAdmin.value || ehControle.value)
+
+const sincronizarSugestoesConcluidos = async () => {
+  if (!podeVerSugestoesConcluidos.value) return
+  const pendentes = fretesConcluidos.value.filter(
+    (frete) => frete?.id && !frete.valor_servico && !sugestoesValorPorFrete.value[String(frete.id)],
+  )
+  for (const frete of pendentes) {
+    try {
+      const resposta = await axios.get(`${API_URL}/fretes/${frete.id}/sugestao-valor`)
+      const sugestao = resposta.data
+      if (!sugestao?.possui_sugestao) continue
+      sugestoesValorPorFrete.value = {
+        ...sugestoesValorPorFrete.value,
+        [String(frete.id)]: sugestao,
+      }
+    } catch (error) {
+      // Sem sugestao disponivel para este frete: segue para os proximos.
+    }
+  }
+}
+
+watch(fretesConcluidos, sincronizarSugestoesConcluidos, { immediate: true })
+
 const sugestaoValorFrete = (frete) => {
   if (!frete?.id) return null
   return sugestoesValorPorFrete.value[String(frete.id)] || null

@@ -183,6 +183,8 @@ def rota_permitida(cargo: str, metodo: str, path: str) -> bool:
     if cargo == CARGO_CONTROLE:
         if metodo_http != "GET":
             return False
+        if re.fullmatch(r"/fretes/\d+/sugestao-valor", caminho):
+            return True
         return caminho in {
             "/fretes",
             "/fretes/concluidos/exportar",
