@@ -2004,8 +2004,14 @@ const excluirMotorista = async (id) => {
     mostrarToast('Sem permissão para excluir motorista.', 'error')
     return
   }
+  const nome = nomeMotorista(id)
+  const confirmou = window.confirm(
+    `Excluir o motorista "${nome}"? Os fretes do histórico serão mantidos, mas ficarão sem motorista vinculado. Esta ação não pode ser desfeita.`,
+  )
+  if (!confirmou) return
   try {
-    await axios.delete(`${API_URL}/motoristas/${id}`)
+    const resposta = await axios.delete(`${API_URL}/motoristas/${id}`)
+    mostrarToast(resposta?.data?.mensagem || 'Motorista excluído.')
     await carregarTudo()
   } catch (error) {
     mostrarToast(error?.response?.data?.detail || 'Não foi possível excluir o motorista.', 'error')
