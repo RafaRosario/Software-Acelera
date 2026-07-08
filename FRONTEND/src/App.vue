@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue'
 import axios from 'axios'
 import { useRoute, useRouter } from 'vue-router'
 import logoAcelera from './assets/logoacelera.png'
@@ -12,6 +12,8 @@ import iconCaminhao from './assets/icon-caminhao.png'
 import iconFornecedores from './assets/icon-fornecedores.png'
 import iconPrestadores from './assets/icon-prestadores.png'
 import ChecklistPublicView from './views/ChecklistPublicView.vue'
+// Carregado sob demanda: o codigo do chat so e baixado no primeiro clique.
+const ChatAssistente = defineAsyncComponent(() => import('./components/ChatAssistente.vue'))
 import { API_URL, authState, encerrarSessao, rotaInicialPorCargo, rotaPermitidaParaCargo } from './auth'
 import { iniciarNotificacoesPush } from './push'
 const tiposVeiculo = ['Motoboy', 'Fiorino', 'Iveco', '3/4', 'Toco', 'Truk', 'Carreta']
@@ -104,6 +106,12 @@ const freteEditandoId = ref(null)
 const abaRetornoEdicaoFrete = ref('fretes')
 const sidebarRecolhida = ref(false)
 const menuMobileAberto = ref(false)
+const chatAberto = ref(false)
+const chatCarregado = ref(false)
+const abrirChat = () => {
+  chatCarregado.value = true
+  chatAberto.value = true
+}
 const avisoPendenciasMostrado = ref(false)
 const checklistToken = computed(() => String(route.params.token || ''))
 const modoChecklist = computed(() => Boolean(checklistToken.value))
@@ -123,6 +131,7 @@ const podeVerFornecedores = computed(() => ehAdmin.value)
 const podeVerPrestadores = computed(() => ehAdmin.value)
 const podeCriarFrete = computed(() => ehAdmin.value)
 const mostrarAlocacaoCompleta = computed(() => ehAdmin.value)
+const podeUsarChat = computed(() => ehAdmin.value || ehControle.value)
 
 const usuariosSistema = ref([])
 const historicoValores = ref([])
@@ -2821,6 +2830,23 @@ onMounted(() => {
         <component :is="Component" :state="viewState" />
       </RouterView>
     </div>
+
+    <button
+      v-if="podeUsarChat && !chatAberto"
+      class="chat-fab"
+      type="button"
+      title="Assistente Acelera"
+      aria-label="Abrir assistente"
+      @click="abrirChat"
+    >
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        <line x1="8" y1="9" x2="16" y2="9" />
+        <line x1="8" y1="13" x2="13" y2="13" />
+      </svg>
+    </button>
+
+    <ChatAssistente v-if="chatCarregado" v-show="chatAberto" @fechar="chatAberto = false" />
   </main>
 </template>
 

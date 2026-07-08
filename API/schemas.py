@@ -557,3 +557,29 @@ class UsuarioSistemaResponse(BaseModel):
     avatar_url: Optional[str] = None
     criado_em: datetime
     atualizado_em: datetime
+
+
+class ChatMensagem(BaseModel):
+    papel: Literal["user", "assistant"]
+    texto: str
+
+    @field_validator("texto")
+    @classmethod
+    def validar_texto(cls, valor: str) -> str:
+        texto = (valor or "").strip()
+        if not texto:
+            raise ValueError("Mensagem vazia")
+        if len(texto) > 4000:
+            raise ValueError("Mensagem muito longa")
+        return texto
+
+
+class ChatRequest(BaseModel):
+    mensagens: list[ChatMensagem]
+
+    @field_validator("mensagens")
+    @classmethod
+    def validar_mensagens(cls, valor: list) -> list:
+        if not valor:
+            raise ValueError("Nenhuma mensagem enviada")
+        return valor[-20:]

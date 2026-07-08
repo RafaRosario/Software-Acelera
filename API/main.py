@@ -18,8 +18,9 @@ from zoneinfo import ZoneInfo
 import jwt
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
+from pydantic import ValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -31,6 +32,13 @@ try:
 except ImportError:
     WEBPUSH_DISPONIVEL = False
     print("AVISO: pywebpush nao instalado. Execute: pip install pywebpush")
+
+try:
+    from openai import OpenAI
+    OPENAI_DISPONIVEL = True
+except ImportError:
+    OPENAI_DISPONIVEL = False
+    print("AVISO: openai nao instalado. Execute: pip install openai")
 
 import models
 import schemas
@@ -179,6 +187,10 @@ def rota_permitida(cargo: str, metodo: str, path: str) -> bool:
 
     if caminho == "/push/subscribe" and metodo_http in {"POST", "DELETE"}:
         return True
+
+    # Assistente de chat: liberado para admin (retorna True acima) e controle.
+    if caminho == "/chat" and metodo_http == "POST":
+        return cargo == CARGO_CONTROLE
 
     if cargo == CARGO_CONTROLE:
         if metodo_http != "GET":
@@ -1950,3 +1962,525 @@ def remover_push_subscription(
     ).delete()
     db.commit()
     return {"status": "removido"}
+
+
+# ---------------------------------------------------------------------------
+# Assistente de chat (consultas em linguagem natural sobre o banco)
+# ---------------------------------------------------------------------------
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-5-mini")
+CHAT_MAX_RODADAS_SQL = 6
+CHAT_MAX_LINHAS_SQL = 200
+CHAT_MAX_CHARS_RESULTADO = 20_000
+
+_openai_client = None
+
+
+def _obter_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    return _openai_client
+
+
+CHAT_PALAVRAS_PROIBIDAS_SQL = re.compile(
+    r"\b(insert|update|delete|drop|alter|create|replace|truncate|grant|revoke|"
+    r"attach|detach|pragma|vacuum|reindex|copy|call|execute|merge|into)\b",
+    re.IGNORECASE,
+)
+CHAT_TABELAS_PROIBIDAS_SQL = re.compile(
+    r"\b(usuarios|push_subscriptions|senha_hash|google_sub)\b",
+    re.IGNORECASE,
+)
+
+
+def _validar_sql_somente_leitura(sql: str) -> str:
+    consulta = (sql or "").strip().rstrip(";").strip()
+    if not consulta:
+        raise ValueError("Consulta vazia.")
+    if ";" in consulta:
+        raise ValueError("Apenas uma instrucao por consulta.")
+    if not re.match(r"^(select|with)\b", consulta, re.IGNORECASE):
+        raise ValueError("Apenas consultas SELECT sao permitidas.")
+    if CHAT_PALAVRAS_PROIBIDAS_SQL.search(consulta):
+        raise ValueError("Consulta contem operacao nao permitida (somente leitura).")
+    if CHAT_TABELAS_PROIBIDAS_SQL.search(consulta):
+        raise ValueError("Esta tabela/coluna nao esta disponivel para o assistente.")
+    if not re.search(r"\blimit\b", consulta, re.IGNORECASE):
+        consulta = f"{consulta} LIMIT {CHAT_MAX_LINHAS_SQL}"
+    return consulta
+
+
+def _serializar_valor_sql(valor):
+    if isinstance(valor, (datetime, date)):
+        return valor.isoformat()
+    if hasattr(valor, "isoformat"):
+        return valor.isoformat()
+    if isinstance(valor, (int, float, str, bool)) or valor is None:
+        return valor
+    return str(valor)
+
+
+def _executar_sql_chat(sql: str) -> str:
+    try:
+        consulta = _validar_sql_somente_leitura(sql)
+    except ValueError as exc:
+        return json_module.dumps({"erro": str(exc)}, ensure_ascii=False)
+
+    try:
+        with SessionLocal() as db:
+            resultado = db.execute(text(consulta))
+            colunas = list(resultado.keys())
+            linhas = [
+                {coluna: _serializar_valor_sql(valor) for coluna, valor in zip(colunas, linha)}
+                for linha in resultado.fetchmany(CHAT_MAX_LINHAS_SQL)
+            ]
+    except Exception as exc:
+        return json_module.dumps(
+            {"erro": f"Falha ao executar a consulta: {exc}"}, ensure_ascii=False
+        )
+
+    corpo = json_module.dumps(
+        {"total_linhas": len(linhas), "linhas": linhas}, ensure_ascii=False, default=str
+    )
+    if len(corpo) > CHAT_MAX_CHARS_RESULTADO:
+        corpo = json_module.dumps(
+            {
+                "erro": "Resultado muito grande. Refaca a consulta com agregacao (COUNT, SUM...) "
+                "ou selecione menos colunas/linhas.",
+                "total_linhas": len(linhas),
+            },
+            ensure_ascii=False,
+        )
+    return corpo
+
+
+# Entidades que o assistente pode cadastrar/atualizar/excluir, reutilizando as
+# mesmas funcoes (e validacoes) dos endpoints do site. Escrita e restrita a admin.
+CHAT_ENTIDADES_ESCRITA = {
+    "motorista": {
+        "criar": (criar_motorista, schemas.MotoristaCreate),
+        "atualizar": (atualizar_motorista, schemas.MotoristaUpdate),
+        "excluir": excluir_motorista,
+    },
+    "veiculo": {
+        "criar": (criar_veiculo, schemas.VeiculoCreate),
+        "atualizar": (atualizar_veiculo, schemas.VeiculoUpdate),
+        "excluir": excluir_veiculo,
+    },
+    "empresa": {
+        "criar": (criar_empresa, schemas.EmpresaCreate),
+        "atualizar": (atualizar_empresa, schemas.EmpresaUpdate),
+        "excluir": excluir_empresa,
+    },
+    "fornecedor": {
+        "criar": (criar_fornecedor, schemas.FornecedorCreate),
+        "atualizar": (atualizar_fornecedor, schemas.FornecedorUpdate),
+        "excluir": excluir_fornecedor,
+    },
+    "prestador_servico": {
+        "criar": (criar_prestador_servico, schemas.PrestadorServicoCreate),
+        "atualizar": (atualizar_prestador_servico, schemas.PrestadorServicoUpdate),
+        "excluir": excluir_prestador_servico,
+    },
+    "frete": {
+        "criar": (criar_frete, schemas.FreteCreate),
+        "atualizar": (atualizar_frete, schemas.FreteUpdate),
+        "excluir": excluir_frete,
+    },
+    "ocorrencia_veiculo": {
+        "criar": (criar_ocorrencia_veiculo, schemas.OcorrenciaVeiculoCreate),
+        "atualizar": (atualizar_ocorrencia_veiculo, schemas.OcorrenciaVeiculoUpdate),
+        "excluir": excluir_ocorrencia_veiculo,
+    },
+}
+
+
+def _serializar_registro_chat(registro) -> dict:
+    if isinstance(registro, dict):
+        return {chave: _serializar_valor_sql(valor) for chave, valor in registro.items()}
+    return {
+        coluna.name: _serializar_valor_sql(getattr(registro, coluna.name))
+        for coluna in registro.__table__.columns
+    }
+
+
+def _executar_escrita_chat(operacao: str, argumentos: dict, usuario: dict) -> str:
+    def erro(mensagem, **extras):
+        return json_module.dumps({"erro": mensagem, **extras}, ensure_ascii=False)
+
+    if usuario.get("cargo") != CARGO_ADMIN:
+        return erro("Apenas administradores podem executar acoes de escrita.")
+
+    entidade = str(argumentos.get("entidade") or "")
+    config = CHAT_ENTIDADES_ESCRITA.get(entidade)
+    if not config:
+        return erro(f"Entidade desconhecida: '{entidade}'.")
+
+    try:
+        if operacao == "cadastrar":
+            funcao, schema_cls = config["criar"]
+            payload = schema_cls(**(argumentos.get("dados") or {}))
+            with SessionLocal() as db:
+                registro = funcao(payload, db)
+
+        elif operacao == "atualizar":
+            registro_id = int(argumentos.get("registro_id"))
+            funcao, schema_cls = config["atualizar"]
+            payload = schema_cls(**(argumentos.get("dados") or {}))
+            with SessionLocal() as db:
+                registro = funcao(registro_id, payload, db)
+
+        elif operacao == "excluir":
+            if not argumentos.get("confirmado_pelo_usuario"):
+                return erro(
+                    "Exclusao bloqueada: o usuario ainda nao confirmou. Mostre o registro "
+                    "e pergunte antes de chamar novamente com confirmado_pelo_usuario=true."
+                )
+            registro_id = int(argumentos.get("registro_id"))
+            with SessionLocal() as db:
+                registro = config["excluir"](registro_id, db)
+
+        else:
+            return erro(f"Operacao desconhecida: '{operacao}'.")
+
+    except ValidationError as exc:
+        detalhes = [
+            f"{'.'.join(str(parte) for parte in e['loc'])}: {e['msg']}" for e in exc.errors()
+        ]
+        return erro("Dados invalidos para esta entidade.", detalhes=detalhes)
+    except HTTPException as exc:
+        return erro(str(exc.detail))
+    except (TypeError, ValueError) as exc:
+        return erro(f"Argumentos invalidos: {exc}")
+    except Exception as exc:
+        print(f"Erro em acao de escrita do chat ({operacao}/{entidade}): {exc}")
+        return erro("Falha inesperada ao executar a acao.")
+
+    return json_module.dumps(
+        {"sucesso": True, "operacao": operacao, "entidade": entidade,
+         "registro": _serializar_registro_chat(registro)},
+        ensure_ascii=False,
+        default=str,
+    )
+
+
+def _executar_ferramenta_chat(nome: str, argumentos: dict, usuario: dict) -> str:
+    if nome == "executar_sql":
+        return _executar_sql_chat(str(argumentos.get("sql", "")))
+    if nome == "cadastrar_registro":
+        return _executar_escrita_chat("cadastrar", argumentos, usuario)
+    if nome == "atualizar_registro":
+        return _executar_escrita_chat("atualizar", argumentos, usuario)
+    if nome == "excluir_registro":
+        return _executar_escrita_chat("excluir", argumentos, usuario)
+    return json_module.dumps({"erro": "Ferramenta desconhecida."}, ensure_ascii=False)
+
+
+CHAT_REGRAS_ESCRITA = """
+ACOES DE ESCRITA (disponiveis para voce):
+Alem de consultar, voce pode cadastrar, atualizar e excluir registros com as ferramentas
+cadastrar_registro, atualizar_registro e excluir_registro.
+Entidades: motorista, veiculo, empresa, fornecedor, prestador_servico, frete, ocorrencia_veiculo.
+
+Regras de escrita:
+- Antes de atualizar ou excluir, localize o registro com executar_sql para obter o id correto.
+  Se houver mais de um candidato, liste-os e pergunte qual e o certo.
+- EXCLUSAO: NUNCA exclua sem confirmacao explicita do usuario NESTA conversa. Primeiro mostre o
+  registro (id e dados principais) e pergunte se confirma. So apos o usuario responder sim,
+  chame excluir_registro com confirmado_pelo_usuario=true.
+- Cadastro/atualizacao: se faltar campo obrigatorio, pergunte ao usuario. Nao invente valores.
+  Apos executar, informe em uma linha o que foi feito, com o id do registro.
+- Se a exclusao falhar por vinculos (ex.: motorista com fretes no historico), explique e ofereca
+  desativar em vez de excluir: atualizar_registro com dados {"ativo": false}.
+- Cancelar um frete = atualizar_registro do frete com dados {"status": "Cancelada"}.
+- Concluir um frete = atualizar status para 'concluido'. Alocar motorista/caminhao ao frete =
+  atualizar motorista_id / veiculo_id (busque os ids pelos nomes/placas primeiro).
+
+Campos do cadastro por entidade (obrigatorios primeiro):
+- motorista: nome, telefone, rg (7 a 9 digitos), cpf (valido, com ou sem pontuacao); opcionais: cnh, observacoes
+- veiculo: placa, tipo (Motoboy|Fiorino|Iveco|3/4|Toco|Truk|Carreta); opcionais: observacoes, observacao_estado
+- empresa: nome, cnpj; opcionais: cliente (true se for cliente da transportadora), cep, logradouro,
+  numero, complemento, bairro, cidade, uf, observacoes (o campo endereco e montado automaticamente)
+- fornecedor: nome, marca; opcionais: telefone, cidade, uf, cep, logradouro, numero, bairro, observacoes
+- prestador_servico: nome, tipo (valvula|mecanicos|bombistas|outros); opcionais: telefone, cidade, uf, observacoes
+- frete: data_coleta (AAAA-MM-DD), horario_coleta (HH:MM), origem, destino, tipo_caminhao_necessario;
+  opcionais: cliente (padrao Edscha), empresas_coleta (pontos adicionais separados por virgula),
+  retorno (true/false), valor_servico, observacoes, motorista_id, veiculo_id, nota_fiscal, cte, oc
+- ocorrencia_veiculo: veiculo_id, categoria, descricao; opcionais: urgencia (Baixa|Media|Alta), reportado_por
+"""
+
+
+def _montar_system_prompt_chat(usuario: dict) -> str:
+    agora = datetime.now(ZoneInfo(TIMEZONE))
+    dialeto = engine.dialect.name  # "sqlite" ou "postgresql"
+    regras_escrita = CHAT_REGRAS_ESCRITA if usuario.get("cargo") == CARGO_ADMIN else ""
+    return f"""Voce e o assistente interno da Acelera Transportes, uma transportadora. \
+Voce responde perguntas dos funcionarios consultando o banco de dados do sistema de gestao de fretes.
+
+Data e hora atual: {agora.strftime("%Y-%m-%d %H:%M")} ({agora.strftime("%A")}), fuso {TIMEZONE}.
+Usuario logado: {usuario.get("nome")} (cargo: {usuario.get("cargo")}).
+Dialeto SQL do banco: {dialeto}.
+
+REGRAS:
+- Use a ferramenta executar_sql para buscar dados reais antes de responder. Nunca invente dados.
+- Se a consulta nao retornar nada, diga claramente que nao encontrou.
+- Responda sempre em portugues do Brasil, de forma direta e organizada.
+- Responda em TEXTO SIMPLES, sem markdown (sem asteriscos, sem #). Use listas com "-" e quebras de linha.
+- Valores monetarios no formato R$ 1.234,56. Datas no formato DD/MM/AAAA.
+- Buscas por nome de pessoa/empresa devem ser aproximadas: use LIKE com % e sem diferenciar maiusculas (ex.: WHERE lower(nome) LIKE lower('%joao%')).
+- "Esta semana" = de segunda a domingo da semana atual, salvo indicacao contraria.
+
+SCHEMA DO BANCO (tabelas disponiveis):
+
+motoristas(id, nome, telefone, rg, cpf, cnh, observacoes, ativo)
+
+veiculos(id, placa, tipo, observacoes, observacao_estado, motivo_indisponibilidade, ativo)
+- tipo: Motoboy, Fiorino, Iveco, 3/4, Toco, Truk, Carreta
+
+empresas(id, nome, cnpj, cliente, cep, logradouro, numero, complemento, bairro, cidade, uf, endereco, observacoes, ativo)
+- cliente (boolean): true quando a empresa e cliente da transportadora
+
+fornecedores(id, nome, telefone, cidade, uf, marca, endereco, observacoes, ativo)
+
+prestadores_servicos(id, nome, telefone, cidade, uf, tipo, endereco, observacoes, ativo)
+- tipo: valvula, mecanicos, bombistas, outros
+
+fretes(id, cliente, cte, oc, nota_fiscal, data_coleta, horario_coleta, origem, empresas_coleta, destino, rota,
+       tipo_caminhao_necessario, retorno, tipo_frete, frete_principal_id, status,
+       valor_servico, valor_retorno, valor_ponto_adicional, observacoes,
+       motorista_id, veiculo_id, checklist_confirmado, checklist_confirmado_em)
+- cliente: nome do cliente (texto)
+- data_coleta: DATE / horario_coleta: TIME
+- status: 'Aguardando horario', 'A caminho P1', 'coletado P1', 'A caminho ponto adicional',
+  'Pontos adicionais', 'A caminho destino', 'Chegada no destino', 'retornando', 'concluido', 'Cancelada'
+  (frete concluido = status 'concluido' ou 'Concluida')
+- tipo_frete: 'principal' ou 'retorno'. IMPORTANTE: ao contar/listar fretes, considere apenas
+  tipo_frete = 'principal' e status <> 'Cancelada', salvo se o usuario pedir o contrario.
+- valor total de um frete = COALESCE(valor_servico,0) + COALESCE(valor_retorno,0) + COALESCE(valor_ponto_adicional,0)
+- empresas_coleta: pontos adicionais de coleta separados por virgula (texto)
+- motorista_id -> motoristas.id / veiculo_id -> veiculos.id (use JOIN para trazer nomes/placas)
+
+ocorrencias_veiculos(id, veiculo_id, categoria, descricao, urgencia, reportado_por, criado_em, status, resolucao, resolvido_em)
+- urgencia: Baixa/Media/Alta; status: 'Aberto' ou 'Resolvido'
+
+fretes_templates_valores(id, empresa_id, caminhao_contratado_id, origem_id, destino_id,
+                         tem_retorno, tem_ponto_adicional, valor_padrao, valor_retorno,
+                         valor_ponto_adicional, fonte, qtd_usos, updated_at)
+- historico de valores praticados por rota/cliente/caminhao
+
+As tabelas de usuarios do sistema NAO estao disponiveis.
+{regras_escrita}"""
+
+
+CHAT_ENTIDADES_NOMES = list(CHAT_ENTIDADES_ESCRITA.keys())
+
+CHAT_TOOLS_OPENAI = [
+    {
+        "type": "function",
+        "function": {
+            "name": "executar_sql",
+            "description": (
+                "Executa uma consulta SQL somente leitura (SELECT) no banco de dados da "
+                "transportadora e retorna as linhas em JSON. Use JOINs para trazer nomes de "
+                "motoristas e placas de veiculos. Prefira agregacoes (COUNT, SUM) quando a "
+                "pergunta for quantitativa."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sql": {
+                        "type": "string",
+                        "description": "A consulta SELECT a executar.",
+                    }
+                },
+                "required": ["sql"],
+            },
+        },
+    }
+]
+
+CHAT_TOOLS_ESCRITA_OPENAI = [
+    {
+        "type": "function",
+        "function": {
+            "name": "cadastrar_registro",
+            "description": (
+                "Cadastra um novo registro no sistema (motorista, veiculo, empresa, fornecedor, "
+                "prestador de servico, frete ou ocorrencia de veiculo). Os dados passam pelas "
+                "mesmas validacoes dos formularios do site."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "entidade": {"type": "string", "enum": CHAT_ENTIDADES_NOMES},
+                    "dados": {
+                        "type": "object",
+                        "description": "Campos do registro conforme a entidade (ver regras no prompt).",
+                    },
+                },
+                "required": ["entidade", "dados"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "atualizar_registro",
+            "description": (
+                "Atualiza campos de um registro existente. Envie apenas os campos que devem "
+                "mudar. Use executar_sql antes para descobrir o id do registro. Tambem serve "
+                "para desativar/reativar (campo ativo), cancelar frete (status='Cancelada'), "
+                "concluir frete (status='concluido') e alocar motorista/veiculo em frete."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "entidade": {"type": "string", "enum": CHAT_ENTIDADES_NOMES},
+                    "registro_id": {"type": "integer", "description": "O id do registro."},
+                    "dados": {
+                        "type": "object",
+                        "description": "Somente os campos a alterar.",
+                    },
+                },
+                "required": ["entidade", "registro_id", "dados"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "excluir_registro",
+            "description": (
+                "Exclui permanentemente um registro. So chame depois que o usuario confirmar "
+                "explicitamente a exclusao nesta conversa."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "entidade": {"type": "string", "enum": CHAT_ENTIDADES_NOMES},
+                    "registro_id": {"type": "integer", "description": "O id do registro."},
+                    "confirmado_pelo_usuario": {
+                        "type": "boolean",
+                        "description": "true somente se o usuario confirmou a exclusao na conversa.",
+                    },
+                },
+                "required": ["entidade", "registro_id", "confirmado_pelo_usuario"],
+            },
+        },
+    },
+]
+
+
+def _tools_chat_para_usuario(usuario: dict) -> list:
+    if usuario.get("cargo") == CARGO_ADMIN:
+        return CHAT_TOOLS_OPENAI + CHAT_TOOLS_ESCRITA_OPENAI
+    return CHAT_TOOLS_OPENAI
+
+
+def _gerar_resposta_chat(mensagens_openai: list, usuario: dict):
+    client = _obter_openai_client()
+    tools = _tools_chat_para_usuario(usuario)
+
+    for _ in range(CHAT_MAX_RODADAS_SQL):
+        stream = client.chat.completions.create(
+            model=OPENAI_CHAT_MODEL,
+            messages=mensagens_openai,
+            tools=tools,
+            max_completion_tokens=3000,
+            stream=True,
+        )
+
+        conteudo_parcial = []
+        tool_calls_parciais = {}
+        finish_reason = None
+
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            escolha = chunk.choices[0]
+            delta = escolha.delta
+
+            if delta and delta.content:
+                conteudo_parcial.append(delta.content)
+                yield delta.content
+
+            if delta and delta.tool_calls:
+                for tc in delta.tool_calls:
+                    acumulado = tool_calls_parciais.setdefault(
+                        tc.index, {"id": "", "nome": "", "argumentos": []}
+                    )
+                    if tc.id:
+                        acumulado["id"] = tc.id
+                    if tc.function and tc.function.name:
+                        acumulado["nome"] = tc.function.name
+                    if tc.function and tc.function.arguments:
+                        acumulado["argumentos"].append(tc.function.arguments)
+
+            if escolha.finish_reason:
+                finish_reason = escolha.finish_reason
+
+        if finish_reason != "tool_calls" or not tool_calls_parciais:
+            return
+
+        tool_calls_msg = []
+        resultados_tools = []
+        for indice in sorted(tool_calls_parciais):
+            chamada = tool_calls_parciais[indice]
+            argumentos_brutos = "".join(chamada["argumentos"])
+            tool_calls_msg.append(
+                {
+                    "id": chamada["id"],
+                    "type": "function",
+                    "function": {"name": chamada["nome"], "arguments": argumentos_brutos},
+                }
+            )
+            try:
+                argumentos = json_module.loads(argumentos_brutos or "{}")
+            except json_module.JSONDecodeError:
+                argumentos = {}
+
+            resultado = _executar_ferramenta_chat(chamada["nome"], argumentos, usuario)
+
+            resultados_tools.append(
+                {"role": "tool", "tool_call_id": chamada["id"], "content": resultado}
+            )
+
+        mensagens_openai.append(
+            {
+                "role": "assistant",
+                "content": "".join(conteudo_parcial) or None,
+                "tool_calls": tool_calls_msg,
+            }
+        )
+        mensagens_openai.extend(resultados_tools)
+
+    yield "\n\nNao consegui concluir a consulta. Tente reformular a pergunta."
+
+
+@app.post("/chat", tags=["Assistente"])
+def conversar_com_assistente(dados: schemas.ChatRequest, request: Request):
+    if not OPENAI_DISPONIVEL:
+        raise HTTPException(status_code=503, detail="Biblioteca openai nao instalada no servidor.")
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY nao configurada no servidor.")
+
+    usuario = usuario_logado(request)
+
+    mensagens_openai = [{"role": "system", "content": _montar_system_prompt_chat(usuario)}]
+    for mensagem in dados.mensagens:
+        mensagens_openai.append({"role": mensagem.papel, "content": mensagem.texto})
+
+    def fluxo():
+        try:
+            yield from _gerar_resposta_chat(mensagens_openai, usuario)
+        except Exception as exc:
+            print(f"Erro no assistente de chat: {exc}")
+            yield "\n\nDesculpe, ocorreu um erro ao consultar o assistente. Tente novamente."
+
+    return StreamingResponse(
+        fluxo(),
+        media_type="text/plain; charset=utf-8",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
