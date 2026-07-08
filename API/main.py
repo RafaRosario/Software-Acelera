@@ -1206,15 +1206,6 @@ def atualizar_motorista(motorista_id: int, dados: schemas.MotoristaUpdate, db: S
 def excluir_motorista(motorista_id: int, db: Session = Depends(get_db)):
     db_motorista = obter_ou_404(db, models.Motorista, motorista_id, "Motorista nao encontrado")
 
-    fretes_vinculados = db.query(models.Frete).filter(
-        models.Frete.motorista_id == motorista_id
-    ).count()
-    if fretes_vinculados > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Este motorista possui {fretes_vinculados} frete(s) no histórico. Desative-o em vez de excluir.",
-        )
-
     usuario_vinculado = db.query(models.Usuario).filter(
         models.Usuario.motorista_id == motorista_id
     ).first()
@@ -1224,6 +1215,11 @@ def excluir_motorista(motorista_id: int, db: Session = Depends(get_db)):
             detail=f"Este motorista está vinculado ao usuário '{usuario_vinculado.nome}'. Remova o vínculo em Acessos antes de excluir.",
         )
 
+    # Fretes do historico sao preservados: apenas perdem o vinculo com o motorista.
+    fretes_desvinculados = db.query(models.Frete).filter(
+        models.Frete.motorista_id == motorista_id
+    ).update({"motorista_id": None})
+
     try:
         db.delete(db_motorista)
         db.commit()
@@ -1231,6 +1227,13 @@ def excluir_motorista(motorista_id: int, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=400, detail="Nao e possivel excluir: motorista possui registros vinculados.")
 
+    if fretes_desvinculados:
+        return {
+            "mensagem": (
+                f"Motorista excluido. {fretes_desvinculados} frete(s) do histórico foram "
+                "mantidos, agora sem motorista vinculado."
+            )
+        }
     return {"mensagem": "Motorista excluido"}
 
 
@@ -2192,8 +2195,9 @@ Regras de escrita:
   chame excluir_registro com confirmado_pelo_usuario=true.
 - Cadastro/atualizacao: se faltar campo obrigatorio, pergunte ao usuario. Nao invente valores.
   Apos executar, informe em uma linha o que foi feito, com o id do registro.
-- Se a exclusao falhar por vinculos (ex.: motorista com fretes no historico), explique e ofereca
-  desativar em vez de excluir: atualizar_registro com dados {"ativo": false}.
+- Excluir motorista mantem os fretes do historico (ficam sem motorista vinculado) - avise isso ao
+  pedir a confirmacao. Se a exclusao falhar por outros vinculos, explique e ofereca desativar em
+  vez de excluir: atualizar_registro com dados {"ativo": false}.
 - Cancelar um frete = atualizar_registro do frete com dados {"status": "Cancelada"}.
 - Concluir um frete = atualizar status para 'concluido'. Alocar motorista/caminhao ao frete =
   atualizar motorista_id / veiculo_id (busque os ids pelos nomes/placas primeiro).
