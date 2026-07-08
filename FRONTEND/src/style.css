@@ -5782,3 +5782,34 @@ h3,
     border-radius: 18px;
   }
 }
+
+/* Botao flutuante do assistente de chat */
+.chat-fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  z-index: 80;
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 26px rgba(7, 133, 70, 0.38);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.chat-fab:hover {
+  background: var(--primary-dark);
+  transform: translateY(-2px);
+}
+
+@media (min-width: 861px) {
+  .chat-fab {
+    right: 24px;
+    bottom: 24px;
+  }
+}
