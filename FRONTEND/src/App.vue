@@ -74,6 +74,8 @@ const filtroClienteFretes = ref('Todos')
 const filtroPendenciasAntigas = ref(false)
 const filtroConcluidos = ref('todos')
 const filtroClienteConcluidos = ref('Todos')
+const filtroTipoCaminhaoConcluidos = ref('Todos')
+const filtroMotoristaConcluidos = ref('Todos')
 const dataInicioConcluidos = ref('')
 const dataFimConcluidos = ref('')
 const buscaOrigemFrete = ref('')
@@ -716,6 +718,8 @@ const fretesConcluidos = computed(() => {
 const fretesConcluidosFiltrados = computed(() => {
   return fretesConcluidos.value.filter((frete) => {
     if (filtroClienteConcluidos.value !== 'Todos' && frete.cliente !== filtroClienteConcluidos.value) return false
+    if (filtroTipoCaminhaoConcluidos.value !== 'Todos' && frete.tipo_caminhao_necessario !== filtroTipoCaminhaoConcluidos.value) return false
+    if (filtroMotoristaConcluidos.value !== 'Todos' && Number(frete.motorista_id) !== Number(filtroMotoristaConcluidos.value)) return false
     if (filtroConcluidos.value === 'todos') return true
 
     const hoje = new Date()
@@ -2284,6 +2288,14 @@ const periodoExportacaoConcluidos = () => {
     params.set('cliente', filtroClienteConcluidos.value)
   }
 
+  if (filtroTipoCaminhaoConcluidos.value !== 'Todos') {
+    params.set('tipo_caminhao', filtroTipoCaminhaoConcluidos.value)
+  }
+
+  if (filtroMotoristaConcluidos.value !== 'Todos') {
+    params.set('motorista_id', filtroMotoristaConcluidos.value)
+  }
+
   return params.toString()
 }
 
@@ -2438,6 +2450,8 @@ const viewState = reactive({
   filtroPendenciasAntigas,
   filtroConcluidos,
   filtroClienteConcluidos,
+  filtroTipoCaminhaoConcluidos,
+  filtroMotoristaConcluidos,
   dataInicioConcluidos,
   dataFimConcluidos,
   buscaOrigemFrete,
