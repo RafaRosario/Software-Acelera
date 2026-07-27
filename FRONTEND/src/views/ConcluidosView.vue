@@ -18,10 +18,13 @@ const {
   excluirConcluidosFiltrados,
   exportarConcluidos,
   filtroClienteConcluidos,
+  filtroTipoCaminhaoConcluidos,
+  filtroMotoristaConcluidos,
   filtroConcluidos,
   formatarData,
   formatarMoeda,
   fretesConcluidosFiltrados,
+  motoristas,
   nomeMotorista,
   placaVeiculo,
   podeCriarFrete,
@@ -34,6 +37,7 @@ const {
   salvarFechamentoFrete,
   salvarValorPreenchidoFrete,
   salvarValoresConcluidosFiltrados,
+  tiposVeiculo,
   totalConcluido,
 } = toRefs(state)
 
@@ -77,6 +81,20 @@ const secaoConcluidos = ref('fechamento')
           <select v-model="filtroClienteConcluidos">
             <option value="Todos">Todos</option>
             <option v-for="empresa in empresasClientes" :key="empresa.id" :value="empresa.nome">{{ empresa.nome }}</option>
+          </select>
+        </label>
+        <label class="field">
+          Tipo de caminhão
+          <select v-model="filtroTipoCaminhaoConcluidos">
+            <option value="Todos">Todos</option>
+            <option v-for="tipo in tiposVeiculo" :key="tipo" :value="tipo">{{ tipo }}</option>
+          </select>
+        </label>
+        <label class="field">
+          Motorista
+          <select v-model="filtroMotoristaConcluidos">
+            <option value="Todos">Todos</option>
+            <option v-for="motorista in motoristas" :key="motorista.id" :value="motorista.id">{{ motorista.nome }}</option>
           </select>
         </label>
         <label class="field" :class="{ disabled: filtroConcluidos !== 'periodo' }">

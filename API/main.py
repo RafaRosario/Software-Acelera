@@ -1583,6 +1583,8 @@ def exportar_fretes_concluidos(
     inicio: Optional[date] = None,
     fim: Optional[date] = None,
     cliente: Optional[str] = None,
+    tipo_caminhao: Optional[str] = None,
+    motorista_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     consulta = db.query(models.Frete).filter(
@@ -1595,6 +1597,10 @@ def exportar_fretes_concluidos(
         consulta = consulta.filter(models.Frete.data_coleta <= fim)
     if cliente:
         consulta = consulta.filter(models.Frete.cliente == cliente)
+    if tipo_caminhao:
+        consulta = consulta.filter(models.Frete.tipo_caminhao_necessario == tipo_caminhao)
+    if motorista_id:
+        consulta = consulta.filter(models.Frete.motorista_id == motorista_id)
 
     fretes = consulta.order_by(models.Frete.data_coleta, models.Frete.horario_coleta).all()
     empresas = {empresa.nome: empresa for empresa in db.query(models.Empresa).all()}
@@ -1671,6 +1677,8 @@ def excluir_fretes_concluidos(
     inicio: Optional[date] = None,
     fim: Optional[date] = None,
     cliente: Optional[str] = None,
+    tipo_caminhao: Optional[str] = None,
+    motorista_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     consulta = db.query(models.Frete).filter(
@@ -1683,6 +1691,10 @@ def excluir_fretes_concluidos(
         consulta = consulta.filter(models.Frete.data_coleta <= fim)
     if cliente:
         consulta = consulta.filter(models.Frete.cliente == cliente)
+    if tipo_caminhao:
+        consulta = consulta.filter(models.Frete.tipo_caminhao_necessario == tipo_caminhao)
+    if motorista_id:
+        consulta = consulta.filter(models.Frete.motorista_id == motorista_id)
 
     fretes = consulta.all()
     total = len(fretes)
